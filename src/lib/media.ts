@@ -28,13 +28,17 @@ export const VIDEO_EXTS = new Set([
 
 const THUMB_MAX = 512;
 
-/** Build a webp thumbnail from an image buffer. Returns false on failure. */
+/**
+ * Build a webp thumbnail from an image buffer. With `animated`, every frame is
+ * kept (animated webp) so GIF thumbnails move in the gallery. Returns false on failure.
+ */
 export async function makeThumb(
   input: Buffer,
-  postId: number
+  postId: number,
+  animated = false
 ): Promise<boolean> {
   try {
-    await sharp(input, { failOn: "none", animated: false })
+    await sharp(input, { failOn: "none", animated })
       .rotate()
       .resize(THUMB_MAX, THUMB_MAX, { fit: "inside", withoutEnlargement: true })
       .webp({ quality: 78 })
@@ -82,11 +86,12 @@ export interface ExtractedDoujin {
  * from the archive so "the image 1 is the cover" holds.
  */
 export async function extractDoujin(
-  zipBuffer: Buffer,
+  zip: Buffer | string,
   postId: number
 ): Promise<ExtractedDoujin> {
-  const zip = new AdmZip(zipBuffer);
-  const entries = zip
+  // a path is read by AdmZip itself (the whole archive still goes through memory)
+  const archive = new AdmZip(zip);
+  const entries = archive
     .getEntries()
     .filter((e) => !e.isDirectory)
     .filter((e) => {
@@ -98,7 +103,7 @@ export async function extractDoujin(
     .sort((a, b) => naturalCompare(a.entryName, b.entryName));
 
   if (!entries.length) {
-    throw new Error("Aucune image trouvée dans le zip");
+    throw new Error("NO_IMAGES");
   }
 
   const outDir = path.join(DIRS.doujin, String(postId));
@@ -144,7 +149,15 @@ export function removePostFiles(post: {
     }
   };
   rm(path.join(DIRS.thumb, `${post.id}.webp`));
-  if (post.type === "image") rm(path.join(DIRS.image, `${post.id}.${post.ext}`));
+  if (post.type === "image" || post.type === "gif") rm(path.join(DIRS.image, `${post.id}.${post.ext}`));
   if (post.type === "video") rm(path.join(DIRS.video, `${post.id}.${post.ext}`));
   if (post.type === "doujin") rm(path.join(DIRS.doujin, String(post.id)));
+}
+
+/** Delete every stored media file (images, gifs, videos, doujin pages, thumbnails). */
+export async function wipeMedia(): Promise<void> {
+  for (const dir of [DIRS.image, DIRS.video, DIRS.doujin, DIRS.thumb]) {
+    await fsp.rm(dir, { recursive: true, force: true });
+  }
+  ensureDirs();
 }

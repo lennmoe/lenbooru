@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getT } from "@/lib/i18n/server";
 import { auth } from "@/auth";
 import { canRead } from "@/lib/perms";
-import { listPosts, PostType } from "@/lib/db";
+import { listPosts, POST_TYPES, PostType } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-const TYPES: PostType[] = ["image", "video", "doujin"];
+const TYPES = POST_TYPES;
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!canRead(session?.user?.role)) {
-    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+    return NextResponse.json({ error: (await getT()).api.unauthorized }, { status: 401 });
   }
 
   const sp = req.nextUrl.searchParams;

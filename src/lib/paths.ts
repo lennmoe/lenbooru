@@ -11,6 +11,8 @@ export const DIRS = {
   video: path.join(MEDIA_DIR, "video"),
   doujin: path.join(MEDIA_DIR, "doujin"),
   thumb: path.join(MEDIA_DIR, "thumb"),
+  /** in-progress chunked uploads (lib/chunks.ts) */
+  tmp: path.join(DATA_DIR, "tmp"),
 };
 
 export function ensureDirs() {

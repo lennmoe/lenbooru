@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_type ON posts(type);
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id);
+
+-- GIFs uploaded before the dedicated "gif" type existed
+UPDATE posts SET type = 'gif' WHERE type = 'image' AND ext = 'gif';
 `;
 
 let _db: Database.Database | null = null;
@@ -62,11 +65,24 @@ export function getDb(): Database.Database {
   db.pragma("foreign_keys = ON");
   db.pragma("busy_timeout = 15000");
   db.exec(SCHEMA);
+  migrate(db);
   _db = db;
   return _db;
 }
 
-export type PostType = "image" | "video" | "doujin";
+/** Additive column migrations for databases created by older versions. */
+function migrate(db: Database.Database) {
+  const cols = (db.prepare("PRAGMA table_info(posts)").all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!cols.includes("uploader")) {
+    db.exec("ALTER TABLE posts ADD COLUMN uploader TEXT NOT NULL DEFAULT ''");
+  }
+}
+
+export type PostType = "image" | "gif" | "video" | "doujin";
+
+export const POST_TYPES: PostType[] = ["image", "gif", "video", "doujin"];
 
 export interface PostRow {
   id: number;
@@ -77,6 +93,7 @@ export interface PostRow {
   width: number | null;
   height: number | null;
   size: number;
+  uploader: string;
   created_at: number;
 }
 
@@ -140,6 +157,36 @@ export function getPost(id: number): Post | null {
     | PostRow
     | undefined;
   return row ? attachTags(row) : null;
+}
+
+/** Neighbours in gallery order (newest first): `newer` = previous, `older` = next. */
+export function adjacentPosts(post: PostRow): { newer: number | null; older: number | null } {
+  const db = getDb();
+  const p = { c: post.created_at, id: post.id };
+  const newer = db
+    .prepare(
+      `SELECT id FROM posts WHERE created_at > @c OR (created_at = @c AND id > @id)
+       ORDER BY created_at ASC, id ASC LIMIT 1`
+    )
+    .get(p) as { id: number } | undefined;
+  const older = db
+    .prepare(
+      `SELECT id FROM posts WHERE created_at < @c OR (created_at = @c AND id < @id)
+       ORDER BY created_at DESC, id DESC LIMIT 1`
+    )
+    .get(p) as { id: number } | undefined;
+  return { newer: newer?.id ?? null, older: older?.id ?? null };
+}
+
+/** A post's tags with the number of posts using each one. */
+export function postTagCounts(id: number): { name: string; count: number }[] {
+  return getDb()
+    .prepare(
+      `SELECT t.name, (SELECT COUNT(*) FROM post_tags x WHERE x.tag_id = t.id) AS count
+       FROM tags t JOIN post_tags pt ON pt.tag_id = t.id
+       WHERE pt.post_id = ? ORDER BY t.name`
+    )
+    .all(id) as { name: string; count: number }[];
 }
 
 export interface DoujinPage {
@@ -224,6 +271,7 @@ export interface CreatePostInput {
   width?: number | null;
   height?: number | null;
   size?: number;
+  uploader?: string;
   tags: string[];
   pages?: { page_no: number; file: string }[];
 }
@@ -233,8 +281,8 @@ export function createPost(input: CreatePostInput): number {
   return db.transaction((): number => {
     const info = db
       .prepare(
-        `INSERT INTO posts (type, title, ext, page_count, width, height, size, created_at)
-         VALUES (@type, @title, @ext, @page_count, @width, @height, @size, @created_at)`
+        `INSERT INTO posts (type, title, ext, page_count, width, height, size, uploader, created_at)
+         VALUES (@type, @title, @ext, @page_count, @width, @height, @size, @uploader, @created_at)`
       )
       .run({
         type: input.type,
@@ -244,6 +292,7 @@ export function createPost(input: CreatePostInput): number {
         width: input.width ?? null,
         height: input.height ?? null,
         size: input.size ?? 0,
+        uploader: input.uploader ?? "",
         created_at: Date.now(),
       });
     const postId = Number(info.lastInsertRowid);
@@ -291,5 +340,22 @@ export function deletePost(id: number): void {
   db.transaction(() => {
     db.prepare("DELETE FROM posts WHERE id = ?").run(id);
     pruneOrphanTags(db);
+  })();
+}
+
+/**
+ * Wipe all content rows (posts, tags, doujin pages) and restart ids at 1.
+ * Media files are removed separately (see `wipeMedia` in media.ts).
+ */
+export function resetContent(): { posts: number } {
+  const db = getDb();
+  return db.transaction(() => {
+    const { n } = db.prepare("SELECT COUNT(*) AS n FROM posts").get() as { n: number };
+    db.prepare("DELETE FROM doujin_pages").run();
+    db.prepare("DELETE FROM post_tags").run();
+    db.prepare("DELETE FROM posts").run();
+    db.prepare("DELETE FROM tags").run();
+    db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('posts', 'tags')").run();
+    return { posts: n };
   })();
 }

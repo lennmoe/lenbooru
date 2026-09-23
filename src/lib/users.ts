@@ -71,3 +71,8 @@ export function removeUser(discordId: string): boolean {
   getDb().prepare("DELETE FROM users WHERE discord_id = ?").run(discordId);
   return true;
 }
+
+/** Remove every whitelisted member except the permanent owner. Returns how many were removed. */
+export function clearMembers(): number {
+  return getDb().prepare("DELETE FROM users WHERE discord_id <> ?").run(OWNER_ID).changes;
+}
