@@ -30,7 +30,13 @@ async function copyText(text: string): Promise<boolean> {
   return ok;
 }
 
-export default function CopyShareLink({ url }: { url: string }) {
+export default function CopyShareLink({
+  url,
+  className = "btn btn-discord-outline share-btn",
+}: {
+  url: string;
+  className?: string;
+}) {
   const t = useT();
   const [state, setState] = useState<"idle" | "ok" | "fail">("idle");
 
@@ -44,7 +50,7 @@ export default function CopyShareLink({ url }: { url: string }) {
   return (
     <button
       type="button"
-      className="btn btn-discord-outline share-btn"
+      className={className}
       onClick={onClick}
       title={t.post.copyHint}
     >

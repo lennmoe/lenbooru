@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listPosts, countPosts, popularTags, POST_TYPES, PostType } from "@/lib/db";
 import Gallery from "@/components/Gallery";
+import { displayTag, parseSearch } from "@/lib/tags";
 import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +17,11 @@ export default async function Home({
   const sp = await searchParams;
   const t = await getT();
   const type = TYPES.includes(sp.type as PostType) ? (sp.type as PostType) : null;
-  const tags = (sp.tags || "")
-    .split(/[\s,]+/)
-    .map((x) => x.trim().toLowerCase())
-    .filter(Boolean);
+  // "parody:naruto" searches for the tag "naruto"; "rating:e" filters by rating
+  const { tags, rating } = parseSearch(sp.tags || "");
 
-  const initial = listPosts({ type, tags, offset: 0, limit: PAGE_SIZE });
-  const total = countPosts({ type, tags });
+  const initial = listPosts({ type, tags, rating, offset: 0, limit: PAGE_SIZE });
+  const total = countPosts({ type, tags, rating });
   const popular = popularTags(24);
 
   const mkHref = (ty: PostType | null) => {
@@ -79,8 +78,12 @@ export default async function Home({
       {tags.length === 0 && popular.length > 0 && (
         <div className="chips">
           {popular.map((p) => (
-            <Link key={p.name} href={`/?tags=${encodeURIComponent(p.name)}`} className="chip">
-              {p.name}
+            <Link
+              key={p.name}
+              href={`/?tags=${encodeURIComponent(p.name)}`}
+              className={`chip tag-${p.category}`}
+            >
+              {displayTag(p.name)}
               <span className="count">{p.count}</span>
             </Link>
           ))}

@@ -18,12 +18,35 @@ interface Props {
   editHref: string | null;
   /** false for doujins: the media block is a cover + page strip, not a single file */
   zoomable: boolean;
+  /** tag groups (Artist / Parody / Character / General) */
+  tags: React.ReactNode;
+  /** <li> rows of the Information section */
   info: React.ReactNode;
-  sidebar: React.ReactNode;
+  /** extra <li> rows of the Options section, after the zoom modes */
+  options: React.ReactNode;
+  /** under the sections (delete button…) */
+  footer?: React.ReactNode;
+  /** post rating, used by safe mode to blur the media */
+  rating: string;
   media: React.ReactNode;
 }
 
-export default function PostView({ newer, older, editHref, zoomable, info, sidebar, media }: Props) {
+/**
+ * Post page layout, Danbooru-style: sidebar (navigation, tags, Information,
+ * Options) and the media, with zoom modes and ←/→/E shortcuts.
+ */
+export default function PostView({
+  newer,
+  older,
+  editHref,
+  zoomable,
+  tags,
+  info,
+  options,
+  footer,
+  media,
+  rating,
+}: Props) {
   const router = useRouter();
   const t = useT();
   const [fit, setFit] = useState<Fit>("both");
@@ -91,29 +114,36 @@ export default function PostView({ newer, older, editHref, zoomable, info, sideb
           )}
         </nav>
 
-        {info}
+        {tags}
 
-        {zoomable && (
-          <p className="post-fit">
-            {FITS.map((f, i) => (
-              <span key={f}>
-                {i > 0 && " · "}
-                <button
-                  type="button"
-                  className={fit === f ? "active" : ""}
-                  onClick={() => choose(f)}
-                >
-                  {t.post.fits[f]}
-                </button>
-              </span>
-            ))}
-          </p>
-        )}
+        <section className="post-section">
+          <h3>{t.info.title}</h3>
+          <ul className="post-info">{info}</ul>
+        </section>
 
-        {sidebar}
+        <section className="post-section">
+          <h3>{t.info.options}</h3>
+          <ul className="post-options">
+            {zoomable &&
+              FITS.map((f) => (
+                <li key={f}>
+                  <button
+                    type="button"
+                    className={fit === f ? "active" : ""}
+                    onClick={() => choose(f)}
+                  >
+                    {t.post.fits[f]}
+                  </button>
+                </li>
+              ))}
+            {options}
+          </ul>
+        </section>
+
+        {footer}
       </aside>
 
-      <div className="post-stage" data-fit={zoomable ? fit : undefined}>
+      <div className="post-stage" data-fit={zoomable ? fit : undefined} data-rating={rating || "none"}>
         {media}
       </div>
     </div>

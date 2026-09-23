@@ -6,18 +6,16 @@ import { canDelete, canEdit } from "@/lib/perms";
 import DeleteButton from "@/components/DeleteButton";
 import PostView from "@/components/PostView";
 import CopyShareLink from "@/components/CopyShareLink";
+import SampleImage from "@/components/SampleImage";
+import { hasSample, samplePercent } from "@/lib/media";
 import { sharePath } from "@/lib/share";
 import { siteOrigin } from "@/lib/origin";
 import { getT } from "@/lib/i18n/server";
 import { formatBytes, type Dict } from "@/lib/i18n/dict";
-import { Download, TagIcon, UserIcon } from "@/components/Icons";
+import { Download, TagIcon } from "@/components/Icons";
+import { TAG_CATEGORIES, displayTag } from "@/lib/tags";
 
 export const dynamic = "force-dynamic";
-
-function fmtFormat(ext: string) {
-  const e = ext.toLowerCase();
-  return e === "jpg" || e === "jpeg" || e === "jfif" ? "JPEG" : e.toUpperCase();
-}
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["year", 365 * 24 * 3600],
@@ -61,61 +59,101 @@ export default async function PostPage({
     (await siteOrigin()) +
     sharePath(post, pages[0] ? pages[0].file.slice(pages[0].file.lastIndexOf(".")) : undefined);
 
+  const dimensions = post.width && post.height ? ` (${post.width}×${post.height})` : "";
+  const sourceIsUrl = /^https?:\/\//i.test(post.source);
+
   const info = (
-    <div className="post-info">
-      {post.title && <h1>{post.title}</h1>}
-      <div>
+    <>
+      <li>
+        {t.info.id}: {post.id}
+      </li>
+      <li>
+        {t.info.uploader}: {post.uploader || t.post.unknownUploader}
+      </li>
+      <li>
+        {t.info.date}:{" "}
+        <time dateTime={new Date(post.created_at).toISOString()} title={new Date(post.created_at).toLocaleString(t.locale)}>
+          {timeAgo(t, post.created_at)}
+        </time>
+      </li>
+      <li>
+        {t.info.size}:{" "}
         {isDoujin ? (
-          <>
-            {t.post.doujinInfo(formatBytes(t, post.size), post.page_count)}
-          </>
+          formatBytes(t, post.size)
         ) : (
-          <>
-            <a href={src} download={`${post.title || post.id}.${post.ext}`} className="dl">
-              <Download />
-              {formatBytes(t, post.size)} {fmtFormat(post.ext)}
-            </a>
-            {post.width && post.height && (
-              <>
-                {" "}
-                ({post.width}×{post.height})
-              </>
-            )}
-          </>
+          <a href={src} download={`${post.id}.${post.ext}`}>
+            {formatBytes(t, post.size)} .{post.ext}
+          </a>
         )}
-      </div>
-      <div title={new Date(post.created_at).toLocaleString(t.locale)}>
-        <UserIcon />
-        {post.uploader ? <strong>{post.uploader}</strong> : t.post.unknownUploader}, {timeAgo(t, post.created_at)}
-      </div>
-      <CopyShareLink url={shareUrl} />
-    </div>
+        {dimensions}
+      </li>
+      <li>
+        {t.info.type}: {t.info.types[post.type]}
+        {isDoujin && ` (${t.info.pages.toLowerCase()} : ${post.page_count})`}
+      </li>
+      <li className="post-source">
+        {t.info.source}:{" "}
+        {!post.source ? (
+          <span className="dim">{t.info.none}</span>
+        ) : sourceIsUrl ? (
+          <a href={post.source} target="_blank" rel="noopener noreferrer nofollow">
+            {post.source.replace(/^https?:\/\/(www\.)?/i, "")}
+          </a>
+        ) : (
+          post.source
+        )}
+      </li>
+      <li>
+        {t.info.rating}:{" "}
+        {post.rating ? (
+          <span className={`rating-text rating-${post.rating}`}>{t.ratings[post.rating]}</span>
+        ) : (
+          <span className="dim">{t.info.unrated}</span>
+        )}
+      </li>
+    </>
   );
 
-  const sidebar = (
+  const tagGroups = (
     <>
-      <h2 className="post-tags-title">{t.post.tags(tags.length)}</h2>
-      {tags.length > 0 ? (
-        <ul className="post-tags">
-          {tags.map((tag) => (
-            <li key={tag.name}>
-              <Link href={`/?tags=${encodeURIComponent(tag.name)}`}>
-                <TagIcon />
-                {tag.name}
-              </Link>
-              <span className="count">{tag.count}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="post-empty">{t.post.noTags}</p>
-      )}
+      {tags.length === 0 && <p className="post-empty">{t.post.noTags}</p>}
+      {/* grouped like Danbooru: Artist, Parody, Character, General */}
+      {TAG_CATEGORIES.map((cat) => {
+        const group = tags.filter((tag) => tag.category === cat);
+        if (!group.length) return null;
+        return (
+          <section key={cat} className="post-tag-group">
+            <h3>{t.tagCats[cat]}</h3>
+            <ul className="post-tags">
+              {group.map((tag) => (
+                <li key={tag.name}>
+                  <Link href={`/?tags=${encodeURIComponent(tag.name)}`} className={`tag-${cat}`}>
+                    <TagIcon />
+                    {displayTag(tag.name)}
+                  </Link>
+                  <span className="count">{tag.count}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </>
+  );
 
-      {canDelete(role) && (
-        <div className="action-row">
-          <DeleteButton id={post.id} />
-        </div>
+  const options = (
+    <>
+      {!isDoujin && (
+        <li>
+          <a href={src} download={`${post.id}.${post.ext}`}>
+            <Download />
+            {t.info.download}
+          </a>
+        </li>
       )}
+      <li>
+        <CopyShareLink url={shareUrl} className="linklike" />
+      </li>
     </>
   );
 
@@ -123,7 +161,7 @@ export default async function PostPage({
     <div className="doujin-stage">
       <Link href={`/doujin/${post.id}/read`} className="doujin-cover">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/media/thumb/${post.id}.webp`} alt={post.title} />
+        <img src={`/media/thumb/${post.id}.webp`} alt={`#${post.id}`} />
       </Link>
       <div>
         <Link href={`/doujin/${post.id}/read`} className="btn btn-accent">
@@ -146,8 +184,20 @@ export default async function PostPage({
   ) : post.type === "video" ? (
     <video src={src} controls autoPlay loop playsInline />
   ) : (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={post.title} width={post.width ?? undefined} height={post.height ?? undefined} />
+    // heavy originals (big GIF / APNG / huge images) start with their light sample
+    hasSample(post.id) ? (
+      <SampleImage
+        sample={`/media/sample/${post.id}.webp`}
+        original={src}
+        percent={samplePercent(post.width, post.height)}
+        alt={post.tags.join(" ")}
+        width={post.width}
+        height={post.height}
+      />
+    ) : (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt={post.tags.join(" ")} width={post.width ?? undefined} height={post.height ?? undefined} />
+    )
   );
 
   return (
@@ -157,9 +207,18 @@ export default async function PostPage({
         older={older}
         editHref={canEdit(role) ? `/post/${post.id}/edit` : null}
         zoomable={!isDoujin}
+        tags={tagGroups}
         info={info}
-        sidebar={sidebar}
+        options={options}
+        footer={
+          canDelete(role) && (
+            <div className="action-row">
+              <DeleteButton id={post.id} />
+            </div>
+          )
+        }
         media={media}
+        rating={post.rating}
       />
     </main>
   );

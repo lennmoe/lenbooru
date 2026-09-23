@@ -18,6 +18,6 @@ export default async function ReadPage({
   if (!pages.length) notFound();
 
   return (
-    <Reader postId={postId} title={post.title || `#${postId}`} pages={pages} />
+    <Reader postId={postId} title={`#${postId}`} pages={pages} />
   );
 }

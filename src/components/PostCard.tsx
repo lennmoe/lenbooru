@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Post } from "@/lib/db";
 import { useT } from "./I18nProvider";
 
@@ -21,25 +21,45 @@ export default function PostCard({ post }: { post: Post }) {
   const t = useT();
   const [thumbFailed, setThumbFailed] = useState(false);
   const thumb = `/media/thumb/${post.id}.webp`;
+  const video = useRef<HTMLVideoElement>(null);
+  const isVideo = post.type === "video";
+
+  // videos have no thumbnail: show the first frame, play muted in a loop on hover
+  function play() {
+    video.current?.play().catch(() => {});
+  }
+  function stop() {
+    const v = video.current;
+    if (!v) return;
+    v.pause();
+    v.currentTime = 0.1;
+  }
 
   return (
     <Link
       href={`/post/${post.id}`}
-      className="card"
-      title={post.title}
+      className={`card${isVideo ? " card-video" : ""}`}
+      data-rating={post.rating || "none"}
+      title={`#${post.id}`}
+      onMouseEnter={isVideo ? play : undefined}
+      onMouseLeave={isVideo ? stop : undefined}
+      onFocus={isVideo ? play : undefined}
+      onBlur={isVideo ? stop : undefined}
       style={{ "--r": ratioOf(post) } as React.CSSProperties}
     >
-      {post.type === "video" && thumbFailed ? (
+      {isVideo ? (
         <video
+          ref={video}
           src={`${mediaSrc(post)}#t=0.1`}
           muted
+          loop
           playsInline
           preload="metadata"
         />
       ) : (
         <img
           src={thumbFailed ? mediaSrc(post) : thumb}
-          alt={post.title}
+          alt={post.tags.join(" ")}
           loading="lazy"
           onError={() => setThumbFailed(true)}
         />
@@ -60,7 +80,6 @@ export default function PostCard({ post }: { post: Post }) {
         </svg>
       )}
 
-      {post.title && <div className="title-strip">{post.title}</div>}
     </Link>
   );
 }
