@@ -15,12 +15,11 @@ export default auth((req) => {
     return;
   }
 
-  const user = req.auth?.user;
-  if (!user) {
+  // Only checks that the visitor is logged in. The role stored in the cookie can
+  // be stale (whitelist changed since login), so role checks happen server-side
+  // where it's re-read from the DB: app/(board)/layout.tsx, /media, /api/*.
+  if (!req.auth?.user) {
     return Response.redirect(new URL("/login", req.nextUrl));
-  }
-  if (!user.role) {
-    return Response.redirect(new URL("/denied", req.nextUrl));
   }
 });
 
@@ -28,5 +27,9 @@ export default auth((req) => {
 // and JSON errors, and keeping them out of middleware avoids Next's 10MB
 // buffered-body limit on uploads that pass through middleware.
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // Public, skipped entirely so no session cookies get attached to what Discord fetches:
+  // /s/* (signed share links) and root-level images = files from public/ (embed image).
+  matcher: [
+    "/((?!api|s/|_next/static|_next/image|favicon.ico|[^/]+\.(?:png|jpe?g|gif|webp|svg|ico)$).*)",
+  ],
 };

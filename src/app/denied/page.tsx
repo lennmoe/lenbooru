@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
+import { SignOutButton } from "@/components/AuthButtons";
+import DiscordLogo from "@/components/DiscordLogo";
+import LangToggle from "@/components/LangToggle";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -8,28 +12,35 @@ export default async function DeniedPage() {
   if (!session?.user) redirect("/login");
   if (session.user.role) redirect("/");
 
+  const t = await getT();
+  const invite = process.env.DISCORD_INVITE_URL?.trim();
+
   return (
     <main className="center-card">
+      <div className="corner-tools">
+        <LangToggle />
+      </div>
       <div className="login-box">
-        <h1 style={{ margin: 0 }}>Accès refusé</h1>
+        <h1 style={{ margin: 0 }}>{t.auth.deniedTitle}</h1>
         <p style={{ color: "var(--text-dim)" }}>
-          Ton compte Discord <strong>{session.user.name}</strong> n&apos;est pas
-          sur la liste blanche.
+          {t.auth.deniedNotListedBefore} <strong>{session.user.name}</strong>{" "}
+          {t.auth.deniedNotListedAfter}
         </p>
-        <p style={{ color: "var(--text-dim)" }}>
-          Donne cet identifiant au propriétaire pour être ajouté&nbsp;:
-        </p>
+        <p style={{ color: "var(--text-dim)" }}>{t.auth.deniedGiveId}</p>
         <code className="id-pill">{session.user.discordId}</code>
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/login" });
-          }}
-        >
-          <button className="btn" type="submit" style={{ width: "100%" }}>
-            Se déconnecter
-          </button>
-        </form>
+        {invite && (
+          <a
+            className="btn btn-discord"
+            href={invite}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ width: "100%" }}
+          >
+            <DiscordLogo size={18} />
+            {t.auth.joinServer}
+          </a>
+        )}
+        <SignOutButton style={{ width: "100%" }}>{t.auth.signOut}</SignOutButton>
       </div>
     </main>
   );
