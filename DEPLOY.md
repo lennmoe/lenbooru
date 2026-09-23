@@ -1,8 +1,8 @@
 # Déployer lenbooru sur un VPS (sans domaine)
 
 lenbooru écrit sur disque (SQLite + fichiers médias), donc il lui faut un vrai
-serveur avec un disque persistant — **pas Vercel**. Ici : ton VPS, avec Docker,
-accès par l'IP.
+serveur avec un disque persistant (pas d'hébergement serverless). Ici : ton VPS, avec Node +
+pm2, accès par l'IP.
 
 ---
 
@@ -33,12 +33,14 @@ https://discord.com/developers/applications → ton app → **OAuth2** → **Red
 
 ---
 
-## 2. Installer Docker sur le VPS
+## 2. Installer Node sur le VPS
 
-Debian / Ubuntu :
+Debian / Ubuntu (Node 22 LTS + outils de compilation pour `better-sqlite3`) :
 
 ```bash
-curl -fsSL https://get.docker.com | sh
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs build-essential python3
+sudo npm install -g pm2
 ```
 
 ---
@@ -50,7 +52,7 @@ git clone <ton-repo> lenbooru      # ou scp/rsync le dossier
 cd lenbooru
 ```
 
-Crée `.env.local` (à côté de `docker-compose.yml`) :
+Crée `.env.local` à la racine du projet :
 
 ```ini
 AUTH_DISCORD_ID=xxxxxxxxxxxxxxxxxx
@@ -58,6 +60,8 @@ AUTH_DISCORD_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 AUTH_SECRET=<npx auth secret, ou: openssl rand -base64 32>
 OWNER_DISCORD_ID=435068712786198538
 AUTH_URL=http://123-45-67-89.nip.io:3000
+DISCORD_BOT_TOKEN=xxxxxxxx          # optionnel : bot de liste blanche
+DISCORD_INVITE_URL=https://discord.gg/xxxx   # optionnel
 ```
 
 > `AUTH_URL` doit être **identique au caractère près** à la Redirect URI Discord.
@@ -68,15 +72,19 @@ AUTH_URL=http://123-45-67-89.nip.io:3000
 
 ## 4. (Option) servir sur le port 80
 
-Dans `docker-compose.yml`, remplace `"3000:3000"` par `"80:3000"`, et retire
-`:3000` de `AUTH_URL` **et** de la Redirect URI Discord.
+Lance avec `PORT=80` (étape 5, nécessite root ou `setcap` sur node), ou mets un
+reverse proxy (Caddy / nginx) devant le port 3000. Retire `:3000` de `AUTH_URL`
+**et** de la Redirect URI Discord.
 
 ---
 
 ## 5. Lancer
 
 ```bash
-docker compose up -d --build
+npm ci
+npm run build
+PORT=3000 pm2 start npm --name lenbooru -- start
+pm2 save && pm2 startup     # relance auto au reboot
 ```
 
 Ouvre le pare-feu pour le port choisi :
@@ -89,7 +97,7 @@ sudo ufw allow 3000/tcp      # ou 80/tcp
 
 Va sur `http://123-45-67-89.nip.io:3000` → **Se connecter avec Discord**. Ton
 compte (`OWNER_DISCORD_ID`) est propriétaire d'office → tu peux ajouter les autres
-membres dans **/members**.
+membres dans **/members** ou avec le bot (`/wl add`).
 
 ---
 
@@ -97,13 +105,13 @@ membres dans **/members**.
 
 | Action | Commande |
 |---|---|
-| Logs | `docker compose logs -f` |
-| Redémarrer | `docker compose restart` |
-| Mettre à jour | `git pull && docker compose up -d --build` |
-| Arrêter | `docker compose down` |
+| Logs | `pm2 logs lenbooru` |
+| Redémarrer | `pm2 restart lenbooru` |
+| Mettre à jour | `git pull && npm ci && npm run build && pm2 restart lenbooru` |
+| Arrêter | `pm2 stop lenbooru` |
 | **Sauvegarde** | archiver le dossier `./data/` (DB + médias) — c'est tout |
 
-Restaurer = remettre `./data/` en place puis `docker compose up -d`.
+Restaurer = remettre `./data/` en place puis `pm2 restart lenbooru`.
 
 ---
 
@@ -115,19 +123,4 @@ Restaurer = remettre `./data/` en place puis `docker compose up -d`.
   `nip.io`), ou restreins l'accès via **Tailscale** / un firewall par IP.
 - Le site entier (galerie + médias + API) est derrière le login Discord ; seuls
   les ID sur la liste blanche entrent, les autres tombent sur `/denied`.
-- Le conteneur tourne en `root` (simplifie le volume monté). Si ça te gêne,
-  ajoute un `USER node` au `Dockerfile` et `chown -R node /app`.
-
----
-
-## Sans Docker (alternative)
-
-```bash
-npm ci
-npm run build
-# renseigne les mêmes variables dans .env.local (avec AUTH_URL)
-PORT=3000 npm start
-```
-
-Puis garde-le en vie avec `pm2 start "npm start" --name lenbooru` (ou un service
-systemd). Le dossier `./data/` est créé automatiquement au premier lancement.
+- Fais tourner l'app sous un utilisateur dédié plutôt que `root`.
