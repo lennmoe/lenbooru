@@ -4,6 +4,7 @@ import { getPost } from "@/lib/db";
 import { currentRole } from "@/lib/session";
 import { canEdit } from "@/lib/perms";
 import EditClient from "@/components/EditClient";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,12 @@ export default async function EditPage({
 
   const post = getPost(postId);
   if (!post) notFound();
+  const t = await getT();
 
   return (
     <main>
       <Link href={`/post/${postId}`} className="back-link">
-        ← Post #{postId}
+        {t.post.backToPost(postId)}
       </Link>
       <EditClient
         id={post.id}

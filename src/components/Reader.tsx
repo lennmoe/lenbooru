@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useT } from "./I18nProvider";
 
 interface Props {
   postId: number;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function Reader({ postId, title, pages }: Props) {
+  const t = useT();
   const [current, setCurrent] = useState(1);
   const containers = useRef<(HTMLImageElement | null)[]>([]);
 
@@ -43,7 +45,7 @@ export default function Reader({ postId, title, pages }: Props) {
     <div className="reader">
       <div className="reader-bar">
         <Link href={`/post/${postId}`} className="btn">
-          ← Retour
+          {t.reader.back}
         </Link>
         <span
           style={{

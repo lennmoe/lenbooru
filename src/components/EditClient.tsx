@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useT } from "./I18nProvider";
 
 export default function EditClient({
   id,
@@ -15,6 +16,7 @@ export default function EditClient({
   type: string;
 }) {
   const router = useRouter();
+  const t = useT();
   const [title, setTitle] = useState(initialTitle);
   const [tags, setTags] = useState(initialTags.join(" "));
   const [busy, setBusy] = useState(false);
@@ -36,20 +38,20 @@ export default function EditClient({
       router.refresh();
     } else {
       const data = await res.json().catch(() => ({}));
-      setMsg({ kind: "err", text: data.error || `Erreur ${res.status}` });
+      setMsg({ kind: "err", text: data.error || t.common.error(res.status) });
       setBusy(false);
     }
   }
 
   return (
     <form className="upload-form" onSubmit={save}>
-      <h1 style={{ fontSize: "1.15rem", margin: 0 }}>Éditer le post #{id}</h1>
+      <h1 style={{ fontSize: "1.15rem", margin: 0 }}>{t.post.editTitle(id)}</h1>
       <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", margin: 0 }}>
-        Type&nbsp;: {type}
+        {t.post.type}&nbsp;: {type}
       </p>
 
       <div className="field">
-        <label htmlFor="title">Titre</label>
+        <label htmlFor="title">{t.common.title}</label>
         <input
           id="title"
           type="text"
@@ -59,7 +61,7 @@ export default function EditClient({
       </div>
 
       <div className="field">
-        <label htmlFor="tags">Tags (espaces ou virgules)</label>
+        <label htmlFor="tags">{t.post.tagsField}</label>
         <textarea
           id="tags"
           rows={3}
@@ -71,7 +73,7 @@ export default function EditClient({
       {msg && <div className={`msg ${msg.kind}`}>{msg.text}</div>}
 
       <button type="submit" className="btn btn-accent" disabled={busy}>
-        {busy ? "Enregistrement…" : "Enregistrer"}
+        {busy ? t.common.saving : t.common.save}
       </button>
     </form>
   );
