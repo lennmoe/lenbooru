@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ROLES, ROLE_LABEL, ROLE_HINT, type Role } from "@/lib/perms";
+import { ROLES, type Role } from "@/lib/perms";
+import { useT } from "./I18nProvider";
 import type { UserRow } from "@/lib/users";
 
 const ASSIGNABLE: Role[] = ["viewer", "editor", "uploader"];
@@ -15,6 +16,7 @@ export default function MembersManager({
   ownerId: string;
 }) {
   const router = useRouter();
+  const t = useT();
   const [users, setUsers] = useState<UserRow[]>(initial);
   const [discordId, setDiscordId] = useState("");
   const [username, setUsername] = useState("");
@@ -43,7 +45,7 @@ export default function MembersManager({
       });
       const data = await res.json();
       if (!res.ok) {
-        setErr(data.error || "Erreur");
+        setErr(data.error || t.common.error(res.status));
         return;
       }
       setDiscordId("");
@@ -65,7 +67,7 @@ export default function MembersManager({
   }
 
   async function remove(id: string) {
-    if (!confirm("Retirer ce membre ?")) return;
+    if (!confirm(t.members.removeConfirm)) return;
     await fetch(`/api/members?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     await refresh();
   }
@@ -74,28 +76,28 @@ export default function MembersManager({
     <div className="members">
       <form className="member-add" onSubmit={add}>
         <div className="field">
-          <label htmlFor="did">ID Discord</label>
+          <label htmlFor="did">{t.members.discordId}</label>
           <input
             id="did"
             type="text"
             inputMode="numeric"
-            placeholder="ex: 123456789012345678"
+            placeholder={t.members.idPlaceholder}
             value={discordId}
             onChange={(e) => setDiscordId(e.target.value)}
           />
         </div>
         <div className="field">
-          <label htmlFor="uname">Pseudo (optionnel)</label>
+          <label htmlFor="uname">{t.members.username}</label>
           <input
             id="uname"
             type="text"
-            placeholder="affichage"
+            placeholder={t.members.usernamePlaceholder}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
         </div>
         <div className="field">
-          <label htmlFor="mrole">Rôle</label>
+          <label htmlFor="mrole">{t.members.role}</label>
           <select
             id="mrole"
             value={role}
@@ -103,16 +105,16 @@ export default function MembersManager({
           >
             {ASSIGNABLE.map((r) => (
               <option key={r} value={r}>
-                {ROLE_LABEL[r]}
+                {t.roles[r]}
               </option>
             ))}
           </select>
         </div>
         <button className="btn btn-accent" type="submit" disabled={busy}>
-          {busy ? "…" : "Ajouter"}
+          {busy ? "…" : t.members.add}
         </button>
       </form>
-      <p className="role-hint">{ROLE_HINT[role]}</p>
+      <p className="role-hint">{t.roleHints[role]}</p>
       {err && <div className="msg err">{err}</div>}
 
       <ul className="member-list">
@@ -125,7 +127,7 @@ export default function MembersManager({
                 <code>{u.discord_id}</code>
               </div>
               {isOwner ? (
-                <span className="tag">propriétaire</span>
+                <span className="tag">{t.members.ownerTag}</span>
               ) : (
                 <>
                   <select
@@ -136,7 +138,7 @@ export default function MembersManager({
                   >
                     {ROLES.filter((r) => r !== "owner").map((r) => (
                       <option key={r} value={r}>
-                        {ROLE_LABEL[r]}
+                        {t.roles[r]}
                       </option>
                     ))}
                   </select>
@@ -144,7 +146,7 @@ export default function MembersManager({
                     className="btn btn-danger"
                     onClick={() => remove(u.discord_id)}
                   >
-                    Retirer
+                    {t.members.remove}
                   </button>
                 </>
               )}
@@ -152,7 +154,7 @@ export default function MembersManager({
           );
         })}
         {users.length === 0 && (
-          <li style={{ color: "var(--text-dim)" }}>Aucun membre pour l&apos;instant.</li>
+          <li style={{ color: "var(--text-dim)" }}>{t.members.none}</li>
         )}
       </ul>
     </div>

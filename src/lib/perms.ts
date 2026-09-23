@@ -9,13 +9,6 @@ export const ROLE_LABEL: Record<Role, string> = {
   owner: "Propriétaire",
 };
 
-export const ROLE_HINT: Record<Role, string> = {
-  viewer: "Peut voir la galerie et lire les doujins.",
-  editor: "Peut aussi modifier titre et tags des posts.",
-  uploader: "Peut aussi uploader et supprimer des posts.",
-  owner: "Contrôle total + gestion des membres.",
-};
-
 export function canRead(r?: Role | null): boolean {
   return !!r;
 }
