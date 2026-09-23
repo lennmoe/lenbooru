@@ -21,6 +21,8 @@ AUTH_DISCORD_ID=...            # Client ID
 AUTH_DISCORD_SECRET=...        # Client Secret
 AUTH_SECRET=...                # npx auth secret
 OWNER_DISCORD_ID=435068712786198538   # ton ID = propriétaire permanent
+DISCORD_BOT_TOKEN=...          # optionnel : bot de liste blanche
+DISCORD_INVITE_URL=...         # optionnel : bouton « Rejoindre le serveur » sur /login
 ```
 
 ### 3. Lancer
@@ -46,19 +48,52 @@ sur la liste blanche** tombe sur `/denied` qui affiche son ID Discord à transme
 **Page `/members`** (propriétaire uniquement) : ajouter un membre par son ID Discord,
 changer son rôle, le retirer. Ton `OWNER_DISCORD_ID` est toujours `owner`.
 
-> Le rôle est mis en cache dans la session : un membre fraîchement ajouté/modifié doit
-> se **reconnecter** (ou attendre le rafraîchissement de session) pour voir le changement.
+Le rôle est relu en base à chaque requête : un ajout / retrait prend effet tout de suite,
+sans reconnexion.
+
+### Bot Discord
+
+Si `DISCORD_BOT_TOKEN` est défini, un bot démarre avec le serveur Next
+([`src/lib/bot.ts`](src/lib/bot.ts), lancé depuis [`src/instrumentation.ts`](src/instrumentation.ts))
+et partage la même base. Réservé aux propriétaires, réponses visibles par toi seul :
+
+| Commande | Effet |
+|---|---|
+| `/wl add membre:@x [role]` | ajoute (défaut : lecture seule) ou change le rôle ; le membre reçoit un DM avec le lien |
+| `/wl remove membre:@x` | retire de la liste blanche |
+| `/wl list` | liste les membres |
+| clic droit sur un membre → **Apps** → **Whitelister** | ajout rapide en lecture seule |
+
+Mise en place : app Discord → **Bot** → *Reset Token* → `DISCORD_BOT_TOKEN`. Puis
+**OAuth2 → URL Generator**, scopes `bot` + `applications.commands`, et ouvre l'URL pour
+inviter le bot sur ton serveur. Les commandes sont enregistrées au démarrage (visibles
+par défaut pour les membres ayant « Gérer le serveur », et en DM avec le bot).
 
 ## Contenu
 
-- **Upload** (`/upload`) : Image / Vidéo / Doujin.
+- **Upload** (`/upload`) : Image / GIF / Vidéo / Doujin.
+  - **GIF** : catégorie à part (filtre « GIFs » dans la galerie), miniature animée.
+    Un `.gif` déposé dans l'onglet Image est aussi classé en GIF.
   - Images et doujins : **sélection multiple** — les fichiers sont importés à la suite
     avec une barre de progression par fichier. Tags communs appliqués à tous ;
     pour un import multiple le titre de chaque post = son nom de fichier.
   - **Doujin** = un `.zip` / `.cbz` avec les images nommées `1, 2, 3, …`.
     Triées en ordre naturel, ré-numérotées `001…NNN`, **l'image 1 = couverture**.
 - **Galerie** (`/`) : grille responsive, filtres par type, recherche multi-tags, scroll infini.
-- **Post** (`/post/[id]`) : média, tags cliquables ; boutons **Éditer** / **Supprimer** selon le rôle.
+- **Post** (`/post/[id]`) : sidebar à gauche (précédent / suivant, éditer, taille + format +
+  dimensions avec téléchargement, uploader, zoom *taille originale · largeur · hauteur · les deux*,
+  tags avec compteur), média à droite. Raccourcis : `←` / `→` post précédent / suivant, `E` éditer.
+- **Partage Discord** : bouton « Copier le lien Discord » sur un post → lien public signé
+  `/s/<id>-<signature>.<ext>` qui sert directement le fichier, donc Discord affiche l'image /
+  le GIF / la vidéo sous le message, sans embed. Le reste du site reste privé ; la signature
+  (HMAC avec `AUTH_SECRET`) ne se devine pas. Changer `AUTH_SECRET` révoque tous les liens,
+  supprimer un post révoque le sien. Nécessite que `AUTH_URL` soit l'URL publique du site.
+- **Embed de l'accueil** : coller l'URL du site sur Discord affiche une carte « lenbooru »
+  (titre, description et l'image `public/eden.png`, définis dans `generateMetadata` de
+  [`layout.tsx`](src/app/layout.tsx)). Les images à la racine de `public/` sont publiques.
+- **Langue** FR / EN : bouton dans le header et sur la page de login (cookie `lang`, sinon langue du
+  navigateur). Textes dans [`src/lib/i18n/dict.ts`](src/lib/i18n/dict.ts). Le bot Discord reste en français.
+- **Thème** clair / sombre : bouton soleil / lune dans le header (suit le système par défaut).
 - **Édition** (`/post/[id]/edit`) : titre + tags.
 - **Lecture doujin** (`/doujin/[id]/read`) : lecteur vertical webtoon, indicateur de page, saut `#p12`.
 
@@ -67,7 +102,7 @@ changer son rôle, le retirer. Ton `OWNER_DISCORD_ID` est toujours `owner`.
 | Quoi | Où |
 |---|---|
 | Base de données | `./data/lenbooru.db` (SQLite, WAL) — tables `posts / tags / post_tags / doujin_pages / users` |
-| Images | `./data/media/image/<id>.<ext>` |
+| Images + GIFs | `./data/media/image/<id>.<ext>` |
 | Vidéos | `./data/media/video/<id>.<ext>` |
 | Pages doujin | `./data/media/doujin/<id>/001.jpg …` |
 | Miniatures | `./data/media/thumb/<id>.webp` |
@@ -79,5 +114,11 @@ Sauvegarde = copier le dossier `data/`.
 
 ## Notes
 
-- L'upload bufferise chaque fichier en mémoire : pour de très grosses vidéos, prévoir de la RAM.
+- **Upload par morceaux** : chaque fichier part en morceaux de 50 Mo
+  ([`uploadLimits.ts`](src/lib/uploadLimits.ts)), écrits directement sur disque dans
+  `data/tmp/` puis rassemblés ([`chunks.ts`](src/lib/chunks.ts)). Pas de limite de taille
+  pratique pour les vidéos, et ça passe derrière un proxy qui limite la taille des requêtes
+  (Cloudflare Tunnel : 100 Mo). Un morceau qui échoue est renvoyé jusqu'à 3 fois ; les
+  uploads abandonnés sont nettoyés au bout de 24 h.
+- Les **zips de doujin** sont encore lus entièrement en mémoire à l'extraction (limite ~2 Go).
 - Aucun HTTPS/déploiement configuré : app pensée pour tourner en local.
