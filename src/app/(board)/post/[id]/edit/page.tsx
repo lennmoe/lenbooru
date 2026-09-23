@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { getPost } from "@/lib/db";
+import { getPost, postTagCounts } from "@/lib/db";
+import { splitTagFields } from "@/lib/tags";
 import { currentRole } from "@/lib/session";
 import { canEdit } from "@/lib/perms";
 import EditClient from "@/components/EditClient";
@@ -29,8 +30,10 @@ export default async function EditPage({
       </Link>
       <EditClient
         id={post.id}
-        title={post.title}
-        tags={post.tags}
+        // parodies / characters go to their own fields, artists stay prefixed ("artist:x")
+        tags={splitTagFields(postTagCounts(post.id))}
+        rating={post.rating}
+        source={post.source}
         type={post.type}
       />
     </main>

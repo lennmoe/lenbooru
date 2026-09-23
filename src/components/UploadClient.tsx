@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "./I18nProvider";
+import TagFieldsEditor from "./TagFieldsEditor";
+import RatingPicker from "./RatingPicker";
+import { joinTagFields, type Rating, type TagFields } from "@/lib/tags";
 import { formatBytes, type Dict } from "@/lib/i18n/dict";
-import { CHUNK_SIZE } from "@/lib/uploadLimits";
+import { errorText, send, uploadChunks } from "@/lib/clientUpload";
 
 type Mode = "image" | "gif" | "video" | "doujin";
 
@@ -33,89 +36,32 @@ interface Job {
 
 type Progress = (pct: number, note?: string) => void;
 
-function newUploadId(): string {
-  // crypto.randomUUID only exists on https / localhost
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return Array.from({ length: 4 }, () => Math.random().toString(36).slice(2, 10)).join("-");
-}
-
-/** Send one request with upload progress; resolves with status + parsed JSON. */
-function send(
-  method: string,
-  url: string,
-  body: Blob | string,
-  contentType: string,
-  onUpload?: (loaded: number) => void
-): Promise<{ status: number; data: { id?: number; error?: string } }> {
-  return new Promise((resolve) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open(method, url);
-    xhr.setRequestHeader("Content-Type", contentType);
-    if (onUpload) xhr.upload.onprogress = (ev) => onUpload(ev.loaded);
-    xhr.onload = () => {
-      let data = {};
-      try {
-        data = JSON.parse(xhr.responseText);
-      } catch {
-        /* non-JSON (proxy error page) */
-      }
-      resolve({ status: xhr.status, data });
-    };
-    xhr.onerror = () => resolve({ status: 0, data: {} });
-    xhr.send(body);
-  });
-}
-
 /**
- * Chunked upload (see lib/chunks.ts): the file goes up in CHUNK_SIZE pieces, each
- * retried a few times, then /api/upload assembles and processes it. Works for
- * multi-GB files and behind proxies that cap request size.
+ * Chunked upload (see lib/chunks.ts and lib/clientUpload.ts), then /api/upload
+ * assembles and processes it. Works for multi-GB files and behind proxies that
+ * cap request size.
  */
 async function uploadOne(
   job: Job,
   mode: Mode,
   tags: string,
-  title: string,
+  meta: { rating: Rating; source: string },
   t: Dict,
   onProgress: Progress
 ): Promise<{ id?: number; error?: string }> {
   const file = job.file;
-  const uploadId = newUploadId();
-  const chunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
-  const pct = (bytes: number) => Math.min(99, Math.floor((bytes / Math.max(file.size, 1)) * 100));
-
-  for (let i = 0; i < chunks; i++) {
-    const start = i * CHUNK_SIZE;
-    const piece = file.slice(start, Math.min(file.size, start + CHUNK_SIZE));
-    let attempt = 0;
-    for (;;) {
-      const r = await send(
-        "PUT",
-        `/api/upload/chunk?id=${uploadId}&index=${i}`,
-        piece,
-        "application/octet-stream",
-        (loaded) => onProgress(pct(start + loaded))
-      );
-      if (r.status >= 200 && r.status < 300) break;
-      // 4xx other than timeouts / rate limits won't get better by retrying
-      const retryable = r.status === 0 || r.status >= 500 || r.status === 408 || r.status === 429;
-      if (!retryable || ++attempt > 3) {
-        return { error: r.data.error || (r.status ? t.common.error(r.status) : t.common.networkError) };
-      }
-      onProgress(pct(start), t.upload.retrying(attempt));
-      await new Promise((res) => setTimeout(res, 1000 * 2 ** attempt));
-    }
-  }
+  const up = await uploadChunks(file, (id, i) => `/api/upload/chunk?id=${id}&index=${i}`, t, onProgress);
+  if ("error" in up) return up;
 
   onProgress(99, t.upload.processing);
-  const r = await send(
+  const r = await send<{ id?: number }>(
     "POST",
     "/api/upload",
-    JSON.stringify({ uploadId, chunks, name: file.name, type: mode, title, tags }),
+    JSON.stringify({ ...up, name: file.name, type: mode, tags, ...meta }),
     "application/json"
   );
   if (r.status >= 200 && r.status < 300 && r.data.id) return { id: r.data.id };
-  return { error: r.data.error || (r.status ? t.common.error(r.status) : t.common.networkError) };
+  return { error: errorText(t, r.status, r.data.error) };
 }
 
 export default function UploadClient() {
@@ -123,14 +69,14 @@ export default function UploadClient() {
   const t = useT();
   const [mode, setMode] = useState<Mode>("image");
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [title, setTitle] = useState("");
-  const [tags, setTags] = useState("");
+  const [tagFields, setTagFields] = useState<TagFields>({ tags: "", parodies: "", characters: "" });
+  const [rating, setRating] = useState<Rating>("g");
+  const [source, setSource] = useState("");
   const [drag, setDrag] = useState(false);
   const [running, setRunning] = useState(false);
   const [finished, setFinished] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const single = jobs.length === 1;
   const doneJobs = useMemo(() => jobs.filter((j) => j.status === "done"), [jobs]);
 
   function addFiles(list: FileList | null) {
@@ -144,9 +90,6 @@ export default function UploadClient() {
     }));
     setJobs((prev) => (MULTI[mode] ? [...prev, ...next] : next));
     setFinished(false);
-    if (next.length === 1 && !title) {
-      setTitle(next[0].file.name.replace(/\.[^.]+$/, ""));
-    }
   }
 
   function removeJob(key: string) {
@@ -155,7 +98,6 @@ export default function UploadClient() {
 
   function reset() {
     setJobs([]);
-    setTitle("");
     setFinished(false);
   }
 
@@ -179,8 +121,8 @@ export default function UploadClient() {
       const r = await uploadOne(
         job,
         mode,
-        tags,
-        single ? title : job.file.name.replace(/\.[^.]+$/, ""),
+        joinTagFields(tagFields),
+        { rating, source },
         t,
         (pct, note) => patch(job.key, { progress: pct, note })
       );
@@ -292,32 +234,27 @@ export default function UploadClient() {
         </ul>
       )}
 
-      {single && (
-        <div className="field">
-          <label htmlFor="title">{t.common.title}</label>
-          <input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t.upload.titlePlaceholder}
-          />
-        </div>
-      )}
       {jobs.length > 1 && (
         <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", margin: 0 }}>
           {t.upload.multiNote(jobs.length)}
         </p>
       )}
 
+      <TagFieldsEditor value={tagFields} onChange={setTagFields} />
+
       <div className="field">
-        <label htmlFor="tags">{t.upload.commonTags}</label>
-        <textarea
-          id="tags"
-          rows={2}
-          value={tags}
-          onChange={(e) => setTags(e.target.value)}
-          placeholder="school_uniform, blonde, vanilla"
+        <label>{t.fields.rating}</label>
+        <RatingPicker value={rating} onChange={setRating} />
+      </div>
+
+      <div className="field">
+        <label htmlFor="source">{t.fields.source}</label>
+        <input
+          id="source"
+          type="text"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          placeholder={t.fields.sourcePlaceholder}
         />
       </div>
 
