@@ -7,10 +7,13 @@ import { getT } from "@/lib/i18n/server";
 import { createPost, deletePost, finalizeDoujin } from "@/lib/db";
 import { DIRS } from "@/lib/paths";
 import { assemble, discardUpload, isUploadId, moveFile } from "@/lib/chunks";
+import { cleanSource, isRating } from "@/lib/tags";
 import {
   IMAGE_EXTS,
   VIDEO_EXTS,
   makeThumb,
+  makeSample,
+  needsSample,
   imageDimensions,
   extractDoujin,
 } from "@/lib/media";
@@ -46,6 +49,8 @@ export async function POST(req: NextRequest) {
   const title = String(body.title ?? "").trim();
   const tags = parseTags(body.tags);
   const uploader = session?.user?.name ?? "";
+  const source = cleanSource(body.source);
+  const rating = isRating(body.rating) ? body.rating : "";
 
   if (!isUploadId(uploadId) || !Number.isInteger(chunks) || chunks < 1 || !name) {
     return NextResponse.json({ error: t.api.missingFile }, { status: 400 });
@@ -89,9 +94,12 @@ export async function POST(req: NextRequest) {
         size,
         tags,
         uploader,
+        source,
+        rating,
       });
       await moveFile(file, path.join(DIRS.image, `${id}.${origExt}`));
-      await makeThumb(buffer, id, isGif);
+      await makeThumb(buffer, id);
+      if (needsSample(width, height, size)) await makeSample(buffer, id);
       return NextResponse.json({ id });
     }
 
@@ -103,6 +111,8 @@ export async function POST(req: NextRequest) {
         size,
         tags,
         uploader,
+        source,
+        rating,
       });
       await moveFile(file, path.join(DIRS.video, `${id}.${origExt}`));
       return NextResponse.json({ id });
@@ -115,6 +125,8 @@ export async function POST(req: NextRequest) {
       size,
       tags,
       uploader,
+      source,
+      rating,
       page_count: 0,
     });
     let extracted;

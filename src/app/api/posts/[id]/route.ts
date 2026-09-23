@@ -1,11 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getT } from "@/lib/i18n/server";
 import { auth } from "@/auth";
-import { canDelete, canEdit } from "@/lib/perms";
+import { canDelete, canEdit, canRead } from "@/lib/perms";
 import { getPost, deletePost, updatePost } from "@/lib/db";
 import { removePostFiles } from "@/lib/media";
+import { cleanSource, isRating, splitTags } from "@/lib/tags";
 
 export const runtime = "nodejs";
+
+/** GET — minimal info about a post (chat previews). */
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!canRead(session?.user?.role)) {
+    return NextResponse.json({ error: (await getT()).api.unauthorized }, { status: 401 });
+  }
+  const post = getPost(parseInt((await params).id, 10));
+  if (!post) return NextResponse.json({ error: (await getT()).api.notFound }, { status: 404 });
+  const { id, type, rating, width, height, page_count, tags } = post;
+  return NextResponse.json({ post: { id, type, rating, width, height, page_count, tags } });
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -24,13 +40,11 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => ({}));
-  const title = String(body.title ?? "").trim();
-  const tags = String(body.tags ?? "")
-    .split(/[\s,]+/)
-    .map((t) => t.trim().toLowerCase())
-    .filter(Boolean);
-
-  updatePost(postId, title, tags);
+  updatePost(postId, {
+    tags: splitTags(String(body.tags ?? "")),
+    source: cleanSource(body.source),
+    rating: isRating(body.rating) ? body.rating : "",
+  });
   return NextResponse.json({ ok: true });
 }
 

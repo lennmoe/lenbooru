@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 import { DATA_DIR, ensureDirs } from "./paths";
+import { parseTag, type Rating, type TagCategory } from "./tags";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS posts (
@@ -40,6 +41,40 @@ CREATE TABLE IF NOT EXISTS users (
   added_at   INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS chat_channels (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT UNIQUE NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id    INTEGER NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
+  author_id     TEXT NOT NULL,
+  author_name   TEXT NOT NULL DEFAULT '',
+  author_avatar TEXT NOT NULL DEFAULT '',
+  content       TEXT NOT NULL,
+  created_at    INTEGER NOT NULL,
+  edited_at     INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel_id, id);
+
+-- chat attachments: uploaded first (message_id NULL), then attached when the message is sent
+CREATE TABLE IF NOT EXISTS chat_uploads (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  file       TEXT UNIQUE NOT NULL,
+  preview    TEXT,
+  owner_id   TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  name       TEXT NOT NULL DEFAULT '',
+  size       INTEGER NOT NULL DEFAULT 0,
+  width      INTEGER,
+  height     INTEGER,
+  message_id INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_uploads_message ON chat_uploads(message_id);
 CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_type ON posts(type);
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id);
@@ -78,6 +113,20 @@ function migrate(db: Database.Database) {
   if (!cols.includes("uploader")) {
     db.exec("ALTER TABLE posts ADD COLUMN uploader TEXT NOT NULL DEFAULT ''");
   }
+  if (!cols.includes("source")) {
+    db.exec("ALTER TABLE posts ADD COLUMN source TEXT NOT NULL DEFAULT ''");
+  }
+  if (!cols.includes("rating")) {
+    // g | s | q | e (Danbooru ratings), '' = not rated
+    db.exec("ALTER TABLE posts ADD COLUMN rating TEXT NOT NULL DEFAULT ''");
+  }
+  const tagCols = (db.prepare("PRAGMA table_info(tags)").all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!tagCols.includes("category")) {
+    // artist | copyright | character | general (see lib/tags.ts)
+    db.exec("ALTER TABLE tags ADD COLUMN category TEXT NOT NULL DEFAULT 'general'");
+  }
 }
 
 export type PostType = "image" | "gif" | "video" | "doujin";
@@ -94,6 +143,8 @@ export interface PostRow {
   height: number | null;
   size: number;
   uploader: string;
+  source: string;
+  rating: Rating | "";
   created_at: number;
 }
 
@@ -106,6 +157,7 @@ const PAGE_SIZE = 60;
 interface ListOpts {
   type?: PostType | null;
   tags?: string[];
+  rating?: Rating | null;
   offset?: number;
   limit?: number;
 }
@@ -123,13 +175,17 @@ function attachTags(row: PostRow): Post {
 }
 
 export function listPosts(opts: ListOpts = {}): Post[] {
-  const { type = null, tags = [], offset = 0, limit = PAGE_SIZE } = opts;
+  const { type = null, tags = [], rating = null, offset = 0, limit = PAGE_SIZE } = opts;
   const where: string[] = [];
   const params: Record<string, unknown> = { offset, limit };
 
   if (type) {
     where.push("p.type = @type");
     params.type = type;
+  }
+  if (rating) {
+    where.push("p.rating = @rating");
+    params.rating = rating;
   }
   if (tags.length) {
     where.push(`p.id IN (
@@ -178,15 +234,41 @@ export function adjacentPosts(post: PostRow): { newer: number | null; older: num
   return { newer: newer?.id ?? null, older: older?.id ?? null };
 }
 
-/** A post's tags with the number of posts using each one. */
-export function postTagCounts(id: number): { name: string; count: number }[] {
+export interface TagInfo {
+  name: string;
+  category: TagCategory;
+  count: number;
+}
+
+/** A post's tags with their category and the number of posts using each one. */
+export function postTagCounts(id: number): TagInfo[] {
   return getDb()
     .prepare(
-      `SELECT t.name, (SELECT COUNT(*) FROM post_tags x WHERE x.tag_id = t.id) AS count
+      `SELECT t.name, t.category, (SELECT COUNT(*) FROM post_tags x WHERE x.tag_id = t.id) AS count
        FROM tags t JOIN post_tags pt ON pt.tag_id = t.id
        WHERE pt.post_id = ? ORDER BY t.name`
     )
-    .all(id) as { name: string; count: number }[];
+    .all(id) as TagInfo[];
+}
+
+/**
+ * Autocomplete: tags starting with `q`, or with a word of it (after "_"),
+ * exact match first, then most used. Optionally limited to one category.
+ */
+export function searchTags(q: string, limit = 10, category: TagCategory | null = null): TagInfo[] {
+  // "!" escapes LIKE wildcards, so "_" and "%" typed by the user match literally
+  const esc = q.replace(/[!%_]/g, (c) => "!" + c);
+  return getDb()
+    .prepare(
+      `SELECT t.name, t.category, COUNT(pt.post_id) AS count
+       FROM tags t JOIN post_tags pt ON pt.tag_id = t.id
+       WHERE (t.name LIKE @start ESCAPE '!' OR t.name LIKE @word ESCAPE '!')
+         AND (@category IS NULL OR t.category = @category)
+       GROUP BY t.id
+       ORDER BY (t.name = @q) DESC, (t.name LIKE @start ESCAPE '!') DESC, count DESC, t.name
+       LIMIT @limit`
+    )
+    .all({ q, start: `${esc}%`, word: `%!_${esc}%`, limit, category }) as TagInfo[];
 }
 
 export interface DoujinPage {
@@ -202,23 +284,27 @@ export function getDoujinPages(id: number): DoujinPage[] {
     .all(id) as DoujinPage[];
 }
 
-export function popularTags(limit = 40): { name: string; count: number }[] {
+export function popularTags(limit = 40): TagInfo[] {
   return getDb()
     .prepare(
-      `SELECT t.name, COUNT(pt.post_id) AS count
+      `SELECT t.name, t.category, COUNT(pt.post_id) AS count
        FROM tags t JOIN post_tags pt ON pt.tag_id = t.id
        GROUP BY t.id ORDER BY count DESC, t.name LIMIT ?`
     )
-    .all(limit) as { name: string; count: number }[];
+    .all(limit) as TagInfo[];
 }
 
 export function countPosts(opts: ListOpts = {}): number {
-  const { type = null, tags = [] } = opts;
+  const { type = null, tags = [], rating = null } = opts;
   const where: string[] = [];
   const params: Record<string, unknown> = {};
   if (type) {
     where.push("p.type = @type");
     params.type = type;
+  }
+  if (rating) {
+    where.push("p.rating = @rating");
+    params.rating = rating;
   }
   if (tags.length) {
     where.push(`p.id IN (
@@ -240,24 +326,30 @@ export function countPosts(opts: ListOpts = {}): number {
   return row.n;
 }
 
-function linkTags(db: Database.Database, postId: number, tags: string[]) {
+/**
+ * Attach tags to a post. A category prefix ("parody:naruto") sets the tag's
+ * category; without one, an existing tag keeps its category and a new one is general.
+ */
+export function linkTags(db: Database.Database, postId: number, tags: string[]) {
   const insertTag = db.prepare(
-    "INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO NOTHING"
+    "INSERT INTO tags (name, category) VALUES (?, ?) ON CONFLICT(name) DO NOTHING"
   );
+  const setCategory = db.prepare("UPDATE tags SET category = ? WHERE name = ?");
   const getTag = db.prepare("SELECT id FROM tags WHERE name = ?");
   const link = db.prepare(
     "INSERT OR IGNORE INTO post_tags (post_id, tag_id) VALUES (?, ?)"
   );
   for (const raw of tags) {
-    const name = raw.trim().toLowerCase();
+    const { name, category } = parseTag(raw);
     if (!name) continue;
-    insertTag.run(name);
+    insertTag.run(name, category ?? "general");
+    if (category) setCategory.run(category, name);
     const tag = getTag.get(name) as { id: number };
     link.run(postId, tag.id);
   }
 }
 
-function pruneOrphanTags(db: Database.Database) {
+export function pruneOrphanTags(db: Database.Database) {
   db.prepare(
     "DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM post_tags)"
   ).run();
@@ -272,6 +364,8 @@ export interface CreatePostInput {
   height?: number | null;
   size?: number;
   uploader?: string;
+  source?: string;
+  rating?: Rating | "";
   tags: string[];
   pages?: { page_no: number; file: string }[];
 }
@@ -281,8 +375,8 @@ export function createPost(input: CreatePostInput): number {
   return db.transaction((): number => {
     const info = db
       .prepare(
-        `INSERT INTO posts (type, title, ext, page_count, width, height, size, uploader, created_at)
-         VALUES (@type, @title, @ext, @page_count, @width, @height, @size, @uploader, @created_at)`
+        `INSERT INTO posts (type, title, ext, page_count, width, height, size, uploader, source, rating, created_at)
+         VALUES (@type, @title, @ext, @page_count, @width, @height, @size, @uploader, @source, @rating, @created_at)`
       )
       .run({
         type: input.type,
@@ -293,6 +387,8 @@ export function createPost(input: CreatePostInput): number {
         height: input.height ?? null,
         size: input.size ?? 0,
         uploader: input.uploader ?? "",
+        source: input.source ?? "",
+        rating: input.rating ?? "",
         created_at: Date.now(),
       });
     const postId = Number(info.lastInsertRowid);
@@ -307,10 +403,14 @@ export function createPost(input: CreatePostInput): number {
   })();
 }
 
-export function updatePost(id: number, title: string, tags: string[]): void {
+export function updatePost(
+  id: number,
+  fields: { tags: string[]; source: string; rating: Rating | "" }
+): void {
+  const { tags, source, rating } = fields;
   const db = getDb();
   db.transaction(() => {
-    db.prepare("UPDATE posts SET title = ? WHERE id = ?").run(title, id);
+    db.prepare("UPDATE posts SET source = ?, rating = ? WHERE id = ?").run(source, rating, id);
     db.prepare("DELETE FROM post_tags WHERE post_id = ?").run(id);
     linkTags(db, id, tags);
     pruneOrphanTags(db);

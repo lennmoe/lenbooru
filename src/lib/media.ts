@@ -3,6 +3,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import AdmZip from "adm-zip";
+import UPNG from "upng-js";
 import { DIRS, ensureDirs } from "./paths";
 
 ensureDirs();
@@ -27,25 +28,92 @@ export const VIDEO_EXTS = new Set([
 ]);
 
 const THUMB_MAX = 512;
+/** Longest side of the "sample" shown on the post page instead of a heavy original. */
+export const SAMPLE_MAX = 1280;
+
+/** Big files get a lighter sample for the post page, like Danbooru's "resized to X%". */
+export function needsSample(width: number | null, height: number | null, bytes: number): boolean {
+  return bytes > 5 * 1024 * 1024 || Math.max(width ?? 0, height ?? 0) > 2000;
+}
+
+/** Share of the original the sample is displayed at (for "Resized to X%"). */
+export function samplePercent(width: number | null, height: number | null): number {
+  const longest = Math.max(width ?? 0, height ?? 0);
+  return longest > SAMPLE_MAX ? Math.round((SAMPLE_MAX / longest) * 100) : 100;
+}
+
+export function samplePath(postId: number): string {
+  return path.join(DIRS.sample, `${postId}.webp`);
+}
+
+export function hasSample(postId: number): boolean {
+  return fs.existsSync(samplePath(postId));
+}
+
+/** Animated PNG: an "acTL" chunk before the first image data. */
+function isApng(buf: Buffer): boolean {
+  if (buf.length < 16 || buf.readUInt32BE(0) !== 0x89504e47) return false;
+  const actl = buf.indexOf("acTL");
+  const idat = buf.indexOf("IDAT");
+  return actl > 0 && (idat < 0 || actl < idat);
+}
 
 /**
- * Build a webp thumbnail from an image buffer. With `animated`, every frame is
- * kept (animated webp) so GIF thumbnails move in the gallery. Returns false on failure.
+ * Resize any image to a WebP that fits in max×max, keeping every frame when the
+ * source is animated (GIF, animated WebP, and APNG — which libvips can't decode,
+ * so its frames are decoded with UPNG and joined back). No pixel limit: long
+ * 1080p GIFs easily exceed sharp's default.
  */
-export async function makeThumb(
-  input: Buffer,
-  postId: number,
-  animated = false
-): Promise<boolean> {
+export async function toWebp(input: Buffer, max: number, quality: number, out: string): Promise<void> {
+  const resize = { fit: "inside" as const, withoutEnlargement: true };
+  if (isApng(input)) {
+    const img = UPNG.decode(Uint8Array.prototype.slice.call(input).buffer);
+    const frames = UPNG.toRGBA8(img); // full-canvas frames, dispose/blend already applied
+    if (frames.length > 1) {
+      const small = await Promise.all(
+        frames.map((f) =>
+          sharp(Buffer.from(f), { raw: { width: img.width, height: img.height, channels: 4 } })
+            .resize(max, max, resize)
+            .png()
+            .toBuffer()
+        )
+      );
+      await sharp(small, { join: { animated: true } })
+        .webp({ quality, effort: 3, loop: 0, delay: img.frames.map((f) => f.delay || 100) })
+        .toFile(out);
+      return;
+    }
+  }
+  const opts = { failOn: "none" as const, limitInputPixels: false as const };
+  const { pages = 1 } = await sharp(input, { ...opts, animated: true }).metadata();
+  await sharp(input, { ...opts, animated: pages > 1 })
+    .rotate()
+    .resize(max, max, resize)
+    .webp({ quality, effort: 3 })
+    .toFile(out);
+}
+
+/**
+ * Build a webp thumbnail from an image buffer. Animated sources keep every frame
+ * so they move in the gallery. Returns false on failure.
+ */
+export async function makeThumb(input: Buffer, postId: number): Promise<boolean> {
   try {
-    await sharp(input, { failOn: "none", animated })
-      .rotate()
-      .resize(THUMB_MAX, THUMB_MAX, { fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 78 })
-      .toFile(path.join(DIRS.thumb, `${postId}.webp`));
+    await toWebp(input, THUMB_MAX, 75, path.join(DIRS.thumb, `${postId}.webp`));
     return true;
   } catch (e) {
     console.error("thumb failed", e);
+    return false;
+  }
+}
+
+/** Lighter version of a big image for the post page (animated if the original is). */
+export async function makeSample(input: Buffer, postId: number): Promise<boolean> {
+  try {
+    await toWebp(input, SAMPLE_MAX, 80, samplePath(postId));
+    return true;
+  } catch (e) {
+    console.error("sample failed", e);
     return false;
   }
 }
@@ -54,7 +122,7 @@ export async function imageDimensions(
   input: Buffer
 ): Promise<{ width: number | null; height: number | null }> {
   try {
-    const meta = await sharp(input, { failOn: "none" }).metadata();
+    const meta = await sharp(input, { failOn: "none", limitInputPixels: false }).metadata();
     return { width: meta.width ?? null, height: meta.height ?? null };
   } catch {
     return { width: null, height: null };
@@ -149,6 +217,7 @@ export function removePostFiles(post: {
     }
   };
   rm(path.join(DIRS.thumb, `${post.id}.webp`));
+  rm(samplePath(post.id));
   if (post.type === "image" || post.type === "gif") rm(path.join(DIRS.image, `${post.id}.${post.ext}`));
   if (post.type === "video") rm(path.join(DIRS.video, `${post.id}.${post.ext}`));
   if (post.type === "doujin") rm(path.join(DIRS.doujin, String(post.id)));
@@ -156,7 +225,7 @@ export function removePostFiles(post: {
 
 /** Delete every stored media file (images, gifs, videos, doujin pages, thumbnails). */
 export async function wipeMedia(): Promise<void> {
-  for (const dir of [DIRS.image, DIRS.video, DIRS.doujin, DIRS.thumb]) {
+  for (const dir of [DIRS.image, DIRS.video, DIRS.doujin, DIRS.thumb, DIRS.sample]) {
     await fsp.rm(dir, { recursive: true, force: true });
   }
   ensureDirs();

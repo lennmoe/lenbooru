@@ -11,6 +11,10 @@ export const DIRS = {
   video: path.join(MEDIA_DIR, "video"),
   doujin: path.join(MEDIA_DIR, "doujin"),
   thumb: path.join(MEDIA_DIR, "thumb"),
+  /** lighter versions of big images for the post page */
+  sample: path.join(MEDIA_DIR, "sample"),
+  /** chat attachments (+ their .preview.webp) */
+  chat: path.join(MEDIA_DIR, "chat"),
   /** in-progress chunked uploads (lib/chunks.ts) */
   tmp: path.join(DATA_DIR, "tmp"),
 };

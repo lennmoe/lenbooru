@@ -4,7 +4,7 @@ export const ROLES: Role[] = ["viewer", "editor", "uploader", "owner"];
 
 export const ROLE_LABEL: Record<Role, string> = {
   viewer: "Lecture seule",
-  editor: "Édition (titre + tags)",
+  editor: "Édition (tags + infos)",
   uploader: "Upload + édition + suppression",
   owner: "Propriétaire",
 };
