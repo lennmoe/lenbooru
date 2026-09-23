@@ -38,15 +38,29 @@ npm run dev            # http://localhost:3000
 Tout le site est derrière le login Discord (middleware). Un compte connecté mais **pas
 sur la liste blanche** tombe sur `/denied` qui affiche son ID Discord à transmettre.
 
-| Rôle | Voir / lire | Éditer titre + tags | Upload + supprimer | Gérer les membres |
+| Rôle | Voir / lire | Éditer tags + infos | Upload + supprimer | Gérer les membres |
 |---|:---:|:---:|:---:|:---:|
 | `viewer` (lecture seule) | ✅ | | | |
 | `editor` (édition) | ✅ | ✅ | | |
 | `uploader` (upload) | ✅ | ✅ | ✅ | |
 | `owner` (toi) | ✅ | ✅ | ✅ | ✅ |
 
-**Page `/members`** (propriétaire uniquement) : ajouter un membre par son ID Discord,
-changer son rôle, le retirer. Ton `OWNER_DISCORD_ID` est toujours `owner`.
+**Page `/admin`** (propriétaire uniquement), en onglets :
+- **Posts** : filtres (tags, `rating:x`, type) et actions groupées sur la sélection — classification,
+  ajout / retrait de tags, suppression.
+- **Tags** : renommer (vers un nom existant = **fusion**), changer la catégorie, supprimer.
+- **Membres** : ajouter un membre par son ID Discord, changer son rôle, le retirer. Ton
+  `OWNER_DISCORD_ID` est toujours `owner`.
+- **Données** : réinitialisation (zone de danger).
+
+**Chat `/chat`** (tous les membres), temps réel façon Discord : salons (créés / supprimés par le
+propriétaire), messages groupés, historique au scroll, modifier / supprimer ses messages (↑ pour
+modifier le dernier), « X est en train d'écrire… », membres en ligne, non-lus par salon, aperçu des
+posts cités (`#12` ou lien `/post/12`, flouté en mode safe).
+**Pièces jointes** : images, GIF et vidéos jusqu'à **250 Mo** (trombone, glisser-déposer ou Ctrl+V),
+envoyées par morceaux dans `data/media/chat/`, avec un aperçu WebP léger (animé) ; supprimées avec
+le message, et nettoyées après 24 h si jamais envoyées. Messages en SQLite
+(`chat_channels`, `chat_messages`), diffusion en **Server-Sent Events** (`/api/chat/stream`).
 
 Le rôle est relu en base à chaque requête : un ajout / retrait prend effet tout de suite,
 sans reconnexion.
@@ -75,14 +89,25 @@ par défaut pour les membres ayant « Gérer le serveur », et en DM avec le bot
   - **GIF** : catégorie à part (filtre « GIFs » dans la galerie), miniature animée.
     Un `.gif` déposé dans l'onglet Image est aussi classé en GIF.
   - Images et doujins : **sélection multiple** — les fichiers sont importés à la suite
-    avec une barre de progression par fichier. Tags communs appliqués à tous ;
-    pour un import multiple le titre de chaque post = son nom de fichier.
+    avec une barre de progression par fichier. Tags, classification et source communs à tous les fichiers.
   - **Doujin** = un `.zip` / `.cbz` avec les images nommées `1, 2, 3, …`.
     Triées en ordre naturel, ré-numérotées `001…NNN`, **l'image 1 = couverture**.
+- **Catégories de tags** (comme Danbooru) : à l'upload et à l'édition, champs dédiés **Parodies** et
+  **Personnages** (suggestions limitées à leur catégorie) ; dans le champ Tags, préfixes `artist:nom`,
+  `parody:x`, `char:x` (aussi `copyright:`, `character:`, `art:`). Sans préfixe =
+  général ; un tag garde ensuite sa catégorie. Sur un post, les tags sont groupés Artiste /
+  Parodie / Personnage / Général, avec une couleur par catégorie. La recherche ignore les préfixes.
+- **Autocomplétion** dans la barre de recherche (`/api/tags?q=`) : début du tag ou d'un de ses mots,
+  couleur de catégorie et nombre de posts ; ↑ ↓ puis Entrée / Tab.
+- **Galerie animée** : GIF, WebP et APNG animés ont une miniature animée ; les vidéos se lancent
+  (muettes, en boucle) au survol.
 - **Galerie** (`/`) : grille responsive, filtres par type, recherche multi-tags, scroll infini.
-- **Post** (`/post/[id]`) : sidebar à gauche (précédent / suivant, éditer, taille + format +
-  dimensions avec téléchargement, uploader, zoom *taille originale · largeur · hauteur · les deux*,
-  tags avec compteur), média à droite. Raccourcis : `←` / `→` post précédent / suivant, `E` éditer.
+- **Post** (`/post/[id]`) : sidebar façon Danbooru — précédent / suivant / éditer, tags groupés par
+  catégorie, **Informations** (ID, uploader, date, taille + format + dimensions, type, source,
+  classification) et **Options** (zoom *taille originale · largeur · hauteur · les deux*, télécharger,
+  copier le lien Discord). Raccourcis : `←` / `→` post précédent / suivant, `E` éditer.
+- **Classification** (General / Sensitive / Questionable / Explicit) et **source** choisies à l'upload
+  et modifiables à l'édition. Recherche : `rating:e` (ou `rating:explicit`, `rating:s`…). Pas de titre.
 - **Partage Discord** : bouton « Copier le lien Discord » sur un post → lien public signé
   `/s/<id>-<signature>.<ext>` qui sert directement le fichier, donc Discord affiche l'image /
   le GIF / la vidéo sous le message, sans embed. Le reste du site reste privé ; la signature
@@ -94,7 +119,7 @@ par défaut pour les membres ayant « Gérer le serveur », et en DM avec le bot
 - **Langue** FR / EN : bouton dans le header et sur la page de login (cookie `lang`, sinon langue du
   navigateur). Textes dans [`src/lib/i18n/dict.ts`](src/lib/i18n/dict.ts). Le bot Discord reste en français.
 - **Thème** clair / sombre : bouton soleil / lune dans le header (suit le système par défaut).
-- **Édition** (`/post/[id]/edit`) : titre + tags.
+- **Édition** (`/post/[id]/edit`) : tags, classification, source.
 - **Lecture doujin** (`/doujin/[id]/read`) : lecteur vertical webtoon, indicateur de page, saut `#p12`.
 
 ## Stockage (tout local)
