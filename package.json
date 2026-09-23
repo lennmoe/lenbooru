@@ -10,12 +10,12 @@
   "dependencies": {
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^11.8.1",
+    "discord.js": "^14.27.0",
     "next": "^15.1.6",
     "next-auth": "^5.0.0-beta.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sharp": "^0.33.5",
-    "vercel": "^59.15.1"
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
