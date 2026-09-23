@@ -3,19 +3,32 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { Post } from "@/lib/db";
+import { useT } from "./I18nProvider";
 
 function mediaSrc(p: Post) {
-  if (p.type === "image") return `/media/image/${p.id}.${p.ext}`;
+  if (p.type === "image" || p.type === "gif") return `/media/image/${p.id}.${p.ext}`;
   if (p.type === "video") return `/media/video/${p.id}.${p.ext}`;
   return `/media/thumb/${p.id}.webp`;
 }
 
+/** Width / height ratio, clamped so panoramas and very tall images stay usable. */
+function ratioOf(p: Post): number {
+  const r = p.width && p.height ? p.width / p.height : p.type === "video" ? 16 / 9 : 3 / 4;
+  return Math.min(Math.max(r, 0.4), 2.5);
+}
+
 export default function PostCard({ post }: { post: Post }) {
+  const t = useT();
   const [thumbFailed, setThumbFailed] = useState(false);
   const thumb = `/media/thumb/${post.id}.webp`;
 
   return (
-    <Link href={`/post/${post.id}`} className="card" title={post.title}>
+    <Link
+      href={`/post/${post.id}`}
+      className="card"
+      title={post.title}
+      style={{ "--r": ratioOf(post) } as React.CSSProperties}
+    >
       {post.type === "video" && thumbFailed ? (
         <video
           src={`${mediaSrc(post)}#t=0.1`}
@@ -33,7 +46,8 @@ export default function PostCard({ post }: { post: Post }) {
       )}
 
       {post.type === "doujin" && <span className="badge doujin">doujin</span>}
-      {post.type === "video" && <span className="badge video">vidéo</span>}
+      {post.type === "video" && <span className="badge video">{t.gallery.badgeVideo}</span>}
+      {post.type === "gif" && <span className="badge gif">gif</span>}
 
       {post.type === "doujin" && post.page_count > 0 && (
         <span className="pages">{post.page_count}p</span>

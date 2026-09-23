@@ -1,16 +1,12 @@
 import Link from "next/link";
-import { listPosts, countPosts, popularTags, PostType } from "@/lib/db";
+import { listPosts, countPosts, popularTags, POST_TYPES, PostType } from "@/lib/db";
 import Gallery from "@/components/Gallery";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 60;
-const TYPES: PostType[] = ["image", "video", "doujin"];
-const TYPE_LABEL: Record<string, string> = {
-  image: "Images",
-  video: "Vidéos",
-  doujin: "Doujins",
-};
+const TYPES = POST_TYPES;
 
 export default async function Home({
   searchParams,
@@ -18,19 +14,20 @@ export default async function Home({
   searchParams: Promise<{ type?: string; tags?: string }>;
 }) {
   const sp = await searchParams;
+  const t = await getT();
   const type = TYPES.includes(sp.type as PostType) ? (sp.type as PostType) : null;
   const tags = (sp.tags || "")
     .split(/[\s,]+/)
-    .map((t) => t.trim().toLowerCase())
+    .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
 
   const initial = listPosts({ type, tags, offset: 0, limit: PAGE_SIZE });
   const total = countPosts({ type, tags });
   const popular = popularTags(24);
 
-  const mkHref = (t: PostType | null) => {
+  const mkHref = (ty: PostType | null) => {
     const q = new URLSearchParams();
-    if (t) q.set("type", t);
+    if (ty) q.set("type", ty);
     if (tags.length) q.set("tags", tags.join(" "));
     const s = q.toString();
     return s ? `/?${s}` : "/";
@@ -40,16 +37,16 @@ export default async function Home({
     <main>
       <div className="chips">
         <Link href={mkHref(null)} className={`chip${!type ? " active" : ""}`}>
-          Tout <span className="count">{!type ? total : ""}</span>
+          {t.gallery.all} <span className="count">{!type ? total : ""}</span>
         </Link>
-        {TYPES.map((t) => (
+        {TYPES.map((type_) => (
           <Link
-            key={t}
-            href={mkHref(t)}
-            className={`chip${type === t ? " active" : ""}`}
+            key={type_}
+            href={mkHref(type_)}
+            className={`chip${type === type_ ? " active" : ""}`}
           >
-            {TYPE_LABEL[t]}
-            {type === t && <span className="count">{total}</span>}
+            {t.gallery.types[type_]}
+            {type === type_ && <span className="count">{total}</span>}
           </Link>
         ))}
       </div>
@@ -57,22 +54,22 @@ export default async function Home({
       {tags.length > 0 && (
         <div className="chips">
           <span style={{ color: "var(--text-dim)", alignSelf: "center" }}>
-            Filtre&nbsp;:
+            {t.gallery.filter}
           </span>
-          {tags.map((t) => {
-            const rest = tags.filter((x) => x !== t);
+          {tags.map((tag) => {
+            const rest = tags.filter((x) => x !== tag);
             const q = new URLSearchParams();
             if (type) q.set("type", type);
             if (rest.length) q.set("tags", rest.join(" "));
             const s = q.toString();
             return (
               <Link
-                key={t}
+                key={tag}
                 href={s ? `/?${s}` : "/"}
                 className="chip active"
-                title="Retirer ce tag"
+                title={t.gallery.removeTag}
               >
-                {t} ✕
+                {tag} ✕
               </Link>
             );
           })}

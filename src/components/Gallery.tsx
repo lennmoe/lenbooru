@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Post } from "@/lib/db";
 import PostCard from "./PostCard";
+import { useT } from "./I18nProvider";
 
 interface Props {
   initial: Post[];
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function Gallery({ initial, type, tags, pageSize }: Props) {
+  const t = useT();
   const [posts, setPosts] = useState<Post[]>(initial);
   const [offset, setOffset] = useState(initial.length);
   const [done, setDone] = useState(initial.length < pageSize);
@@ -60,7 +62,7 @@ export default function Gallery({ initial, type, tags, pageSize }: Props) {
   if (!posts.length) {
     return (
       <p className="empty">
-        Rien ici. <a href="/upload">Upload ton premier post →</a>
+        {t.gallery.empty} <a href="/upload">{t.gallery.uploadFirst}</a>
       </p>
     );
   }
@@ -73,8 +75,8 @@ export default function Gallery({ initial, type, tags, pageSize }: Props) {
         ))}
       </div>
       <div ref={sentinel} className="sentinel" />
-      {loading && <p className="loading">Chargement…</p>}
-      {done && <p className="loading">— fin —</p>}
+      {loading && <p className="loading">{t.gallery.loading}</p>}
+      {done && <p className="loading">{t.gallery.end}</p>}
     </>
   );
 }
