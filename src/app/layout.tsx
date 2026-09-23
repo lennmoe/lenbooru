@@ -52,12 +52,14 @@ export default async function RootLayout({
   // explicit choice from ThemeToggle; absent = follow the OS (handled in CSS)
   const saved = (await cookies()).get("theme")?.value;
   const theme = saved === "light" || saved === "dark" ? saved : undefined;
+  // safe mode (SafeModeToggle): set on the server so images never flash unblurred
+  const safe = (await cookies()).get("safe")?.value === "1";
   const lang = await getLang();
 
   return (
     // suppressHydrationWarning: browser extensions (Dark Reader, etc.) add
     // attributes to <html>/<body> before React hydrates
-    <html lang={lang} data-theme={theme} suppressHydrationWarning>
+    <html lang={lang} data-theme={theme} data-safe={safe ? "" : undefined} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <I18nProvider lang={lang}>{children}</I18nProvider>
       </body>

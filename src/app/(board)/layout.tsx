@@ -1,11 +1,14 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canManageUsers, canUpload } from "@/lib/perms";
 import { getT } from "@/lib/i18n/server";
 import LangToggle from "@/components/LangToggle";
 import ThemeToggle from "@/components/ThemeToggle";
+import SafeModeToggle from "@/components/SafeModeToggle";
 import UserMenu from "@/components/UserMenu";
+import TagSearch from "@/components/TagSearch";
 
 /**
  * Layout de toutes les pages réservées aux membres. Le rôle est relu en base à
@@ -31,26 +34,31 @@ export default async function BoardLayout({
         <Link href="/" className="brand">
           lenbooru
         </Link>
-        <form action="/" method="get">
-          <input
-            type="search"
-            name="tags"
-            placeholder={t.header.searchPlaceholder}
-            autoComplete="off"
-          />
-        </form>
+        <Suspense
+          fallback={
+            <form action="/" method="get" className="tag-search">
+              <input type="search" name="tags" placeholder={t.header.searchPlaceholder} />
+            </form>
+          }
+        >
+          <TagSearch />
+        </Suspense>
 
         {canUpload(role) && (
           <Link href="/upload" className="btn btn-accent">
             {t.header.upload}
           </Link>
         )}
+        <Link href="/chat" className="btn">
+          {t.header.chat}
+        </Link>
         {canManageUsers(role) && (
-          <Link href="/members" className="btn">
-            {t.header.members}
+          <Link href="/admin" className="btn">
+            {t.header.admin}
           </Link>
         )}
 
+        <SafeModeToggle />
         <LangToggle />
         <ThemeToggle />
 
