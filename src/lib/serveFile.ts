@@ -1,6 +1,4 @@
-import fs from "node:fs";
-import { stat } from "node:fs/promises";
-import { Readable } from "node:stream";
+import { open, stat, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 
 export const MIME: Record<string, string> = {
@@ -19,6 +17,65 @@ export const MIME: Record<string, string> = {
   ".mkv": "video/x-matroska",
   ".avi": "video/x-msvideo",
 };
+
+const CHUNK = 256 * 1024;
+
+/**
+ * Pull-based web stream over bytes [start, end] of a file. Unlike
+ * Readable.toWeb(fs.createReadStream()), it never enqueues after the client
+ * aborted (video seek cancels in-flight range requests), which used to crash
+ * with ERR_INVALID_STATE "Controller is already closed".
+ */
+function fileStream(abs: string, start: number, end: number): ReadableStream<Uint8Array> {
+  let fh: FileHandle | null = null;
+  let pos = start;
+  let done = false;
+
+  const release = async () => {
+    done = true;
+    const h = fh;
+    fh = null;
+    await h?.close().catch(() => {});
+  };
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        if (done) return;
+        if (!fh) fh = await open(abs, "r");
+        const remaining = end - pos + 1;
+        if (remaining <= 0) {
+          await release();
+          controller.close();
+          return;
+        }
+        const buf = new Uint8Array(Math.min(CHUNK, remaining));
+        const { bytesRead } = await fh.read(buf, 0, buf.length, pos);
+        if (done) return; // cancelled while reading
+        if (bytesRead === 0) {
+          await release();
+          controller.close();
+          return;
+        }
+        pos += bytesRead;
+        controller.enqueue(bytesRead < buf.length ? buf.subarray(0, bytesRead) : buf);
+      } catch (err) {
+        const wasDone = done;
+        await release();
+        if (!wasDone) {
+          try {
+            controller.error(err);
+          } catch {
+            /* already closed */
+          }
+        }
+      }
+    },
+    cancel() {
+      return release();
+    },
+  });
+}
 
 /**
  * Stream a file from disk with its MIME type and HTTP Range support (video seek).
@@ -61,8 +118,7 @@ export async function serveFile(
           headers: { "Content-Range": `bytes */${total}` },
         });
       }
-      const stream = fs.createReadStream(abs, { start, end });
-      return new Response(Readable.toWeb(stream) as ReadableStream, {
+      return new Response(fileStream(abs, start, end), {
         status: 206,
         headers: {
           ...baseHeaders,
@@ -73,8 +129,7 @@ export async function serveFile(
     }
   }
 
-  const stream = fs.createReadStream(abs);
-  return new Response(Readable.toWeb(stream) as ReadableStream, {
+  return new Response(fileStream(abs, 0, total - 1), {
     status: 200,
     headers: { ...baseHeaders, "Content-Length": String(total) },
   });
