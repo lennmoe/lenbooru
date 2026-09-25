@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ messages: listMessages(channel, before, 50) });
 }
 
-/** POST { channel, content, attachments?: number[] } — text, files, or both. */
+/** POST { channel, content, attachments?: number[], reply_to?: number } — text, files, or both. */
 export async function POST(req: NextRequest) {
   const me = await chatMember();
   if (!me) return deny(401, "unauthorized");
@@ -42,12 +42,16 @@ export async function POST(req: NextRequest) {
     ? body.attachments.map(Number).filter((n: number) => Number.isInteger(n) && n > 0)
     : [];
   if ((!content && !uploads.length) || !channelExists(channel)) return deny(400, "badMessage");
+  // a reply must target a message of the same channel
+  const replied = body.reply_to ? getMessage(Number(body.reply_to)) : null;
+  if (body.reply_to && replied?.channel_id !== channel) return deny(400, "badMessage");
   const created = addMessage({
     channel_id: channel,
     author_id: me.user.id,
     author_name: me.user.name,
     author_avatar: me.user.avatar,
     content,
+    reply_to: replied?.id ?? null,
   });
   // only the sender's own pending uploads can be attached
   const attached = uploads.length ? attachUploads(uploads, me.user.id, created.id) : [];

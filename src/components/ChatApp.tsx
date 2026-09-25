@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Attachment, Channel, ChatMessage } from "@/lib/chat";
+import type { Attachment, Channel, ChatMessage, Reaction } from "@/lib/chat";
+import { EMOJIS, QUICK_EMOJIS, isEmoji } from "@/lib/emoji";
 import { errorText, send as sendXhr, uploadChunks } from "@/lib/clientUpload";
 import { formatBytes } from "@/lib/i18n/dict";
 import { CHAT_MAX_BYTES } from "@/lib/uploadLimits";
@@ -13,6 +14,7 @@ import { useT } from "./I18nProvider";
 type ServerEvent =
   | { type: "message" | "edit"; message: ChatMessage }
   | { type: "delete"; id: number; channel_id: number }
+  | { type: "reactions"; id: number; channel_id: number; reactions: Reaction[] }
   | { type: "typing"; channel_id: number; user: ChatUser }
   | { type: "presence"; users: ChatUser[] }
   | { type: "channels" };
@@ -21,6 +23,7 @@ const PAGE = 50;
 /** consecutive messages from the same person within this delay are grouped */
 const GROUP_MS = 7 * 60 * 1000;
 const TYPING_MS = 6000;
+const RECENT_EMOJIS_KEY = "lenbooru.chat.recentEmojis";
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -33,6 +36,17 @@ function Avatar({ name, src, size = 40 }: { name: string; src: string; size?: nu
     <span className="avatar avatar-fallback" style={{ width: size, height: size }}>
       {(name.trim()[0] || "?").toUpperCase()}
     </span>
+  );
+}
+
+function SmileIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
+    </svg>
   );
 }
 
@@ -189,6 +203,87 @@ function Attachments({ items }: { items: Attachment[] }) {
   );
 }
 
+/** One-line text of the message being answered. */
+function replySnippet(t: Dict, m: { content: string; files: number } | ChatMessage) {
+  const text = m.content.replace(/\s+/g, " ").trim();
+  if (text) return text;
+  const files = "files" in m ? m.files : m.attachments.length;
+  return files ? t.chat.replyFiles : "";
+}
+
+type Anchor = { top: number; bottom: number; left: number; right: number };
+
+/** Emoji grid next to the clicked button, plus a field for any other emoji (OS picker). */
+function EmojiPicker({
+  anchor,
+  onPick,
+  onClose,
+  placeholder,
+}: {
+  anchor: Anchor;
+  onPick: (emoji: string) => void;
+  onClose: () => void;
+  placeholder: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [other, setOther] = useState("");
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    const left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8));
+    const below = anchor.bottom + 6;
+    const top = below + height <= window.innerHeight - 8 ? below : Math.max(8, anchor.top - height - 6);
+    setPos({ left, top });
+  }, [anchor]);
+
+  useEffect(() => {
+    const down = (e: MouseEvent) => {
+      const target = e.target as Element;
+      // the opening button toggles by itself
+      if (!ref.current?.contains(target) && !target.closest?.("[data-emoji-anchor]")) onClose();
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", down);
+    document.addEventListener("keydown", key);
+    window.addEventListener("resize", onClose);
+    return () => {
+      document.removeEventListener("mousedown", down);
+      document.removeEventListener("keydown", key);
+      window.removeEventListener("resize", onClose);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="chat-emoji-picker"
+      style={{ left: pos?.left ?? 0, top: pos?.top ?? 0, visibility: pos ? "visible" : "hidden" }}
+    >
+      <div className="chat-emoji-grid">
+        {EMOJIS.map((e) => (
+          <button key={e} type="button" onClick={() => onPick(e)} title={e}>
+            {e}
+          </button>
+        ))}
+      </div>
+      <input
+        value={other}
+        placeholder={placeholder}
+        onChange={(e) => {
+          const v = e.target.value.trim();
+          if (isEmoji(v)) onPick(v);
+          else setOther(e.target.value);
+        }}
+      />
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------ component */
 
 export default function ChatApp({
@@ -215,6 +310,10 @@ export default function ChatApp({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [picker, setPicker] = useState<{ id: number; anchor: Anchor } | null>(null);
+  const [recent, setRecent] = useState<string[]>([]);
+  const [flash, setFlash] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [, setTick] = useState(0);
 
@@ -228,6 +327,20 @@ export default function ChatApp({
 
   const active = channels.find((c) => c.id === activeId);
   const list = messages[activeId];
+
+  const closePicker = useCallback(() => setPicker(null), []);
+
+  // most recently picked emojis become the quick reactions (client only: no hydration mismatch)
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RECENT_EMOJIS_KEY) || "[]");
+      if (Array.isArray(saved)) setRecent(saved.filter(isEmoji).slice(0, 3));
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+
+  const quick = [...recent, ...QUICK_EMOJIS.filter((e) => !recent.includes(e))].slice(0, 3);
 
   const scrollToBottom = useCallback(() => {
     const el = scroller.current;
@@ -253,6 +366,8 @@ export default function ChatApp({
   useEffect(() => {
     if (!activeId) return;
     atBottom.current = true;
+    setReplyTo(null);
+    setPicker(null);
     if (!messages[activeId]) loadChannel(activeId);
     setUnread((u) => ({ ...u, [activeId]: 0 }));
     try {
@@ -300,6 +415,12 @@ export default function ChatApp({
       el.scrollTop = el.scrollHeight;
     }
   }, [list]);
+
+  const setReactions = useCallback((channelId: number, id: number, reactions: Reaction[]) => {
+    setMessages((m) =>
+      m[channelId] ? { ...m, [channelId]: m[channelId].map((x) => (x.id === id ? { ...x, reactions } : x)) } : m
+    );
+  }, []);
 
   /* ---- live events */
 
@@ -362,16 +483,37 @@ export default function ChatApp({
       } else if (ev.type === "edit") {
         const msg = ev.message;
         setMessages((m) =>
-          m[msg.channel_id] ? { ...m, [msg.channel_id]: m[msg.channel_id].map((x) => (x.id === msg.id ? msg : x)) } : m
+          m[msg.channel_id]
+            ? {
+                ...m,
+                [msg.channel_id]: m[msg.channel_id].map((x) =>
+                  x.id === msg.id
+                    ? msg
+                    : x.reply?.id === msg.id // keep reply previews in sync
+                      ? { ...x, reply: { ...x.reply, content: msg.content.slice(0, 200) } }
+                      : x
+                ),
+              }
+            : m
         );
       } else if (ev.type === "delete") {
         setMessages((m) =>
-          m[ev.channel_id] ? { ...m, [ev.channel_id]: m[ev.channel_id].filter((x) => x.id !== ev.id) } : m
+          m[ev.channel_id]
+            ? {
+                ...m,
+                [ev.channel_id]: m[ev.channel_id]
+                  .filter((x) => x.id !== ev.id)
+                  .map((x) => (x.reply?.id === ev.id ? { ...x, reply: null } : x)),
+              }
+            : m
         );
+        setReplyTo((r) => (r?.id === ev.id ? null : r));
+      } else if (ev.type === "reactions") {
+        setReactions(ev.channel_id, ev.id, ev.reactions);
       }
     };
     return () => es.close();
-  }, [loadChannel, me.id]);
+  }, [loadChannel, setReactions, me.id]);
 
   // expire "is typing" entries
   useEffect(() => {
@@ -389,15 +531,23 @@ export default function ChatApp({
     const content = draft.trim();
     if (!canSend || !activeId) return;
     const sent = ready.map((p) => p.key);
+    const replying = replyTo;
     setDraft("");
+    setReplyTo(null);
     atBottom.current = true;
     const r = await fetch("/api/chat/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel: activeId, content, attachments: ready.map((p) => p.attachment!.id) }),
+      body: JSON.stringify({
+        channel: activeId,
+        content,
+        attachments: ready.map((p) => p.attachment!.id),
+        reply_to: replying?.id,
+      }),
     });
     if (!r.ok) {
       setDraft(content); // give it back
+      setReplyTo(replying);
       return;
     }
     setPending((ps) => ps.filter((p) => !sent.includes(p.key)));
@@ -474,6 +624,54 @@ export default function ChatApp({
     });
   }
 
+  async function react(id: number, emoji: string) {
+    const r = await fetch("/api/chat/reactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, emoji }),
+    });
+    if (r.ok) {
+      const { reactions } = (await r.json()) as { reactions: Reaction[] };
+      setReactions(activeId, id, reactions);
+    } else if (r.status === 400) {
+      alert(t.chat.tooManyReactions);
+    }
+  }
+
+  function pickEmoji(emoji: string) {
+    if (!picker) return;
+    react(picker.id, emoji);
+    setPicker(null);
+    const next = [emoji, ...recent.filter((e) => e !== emoji)].slice(0, 3);
+    setRecent(next);
+    try {
+      localStorage.setItem(RECENT_EMOJIS_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable */
+    }
+  }
+
+  function openPicker(id: number, button: HTMLElement) {
+    if (picker?.id === id) return setPicker(null);
+    const { top, bottom, left, right } = button.getBoundingClientRect();
+    setPicker({ id, anchor: { top, bottom, left, right } });
+  }
+
+  function startReply(m: ChatMessage) {
+    setEditing(null);
+    setReplyTo(m);
+    composer.current?.focus();
+  }
+
+  /** Scroll to a loaded message and highlight it briefly. */
+  function jumpTo(id: number) {
+    const el = document.getElementById(`chat-msg-${id}`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    setFlash(id);
+    setTimeout(() => setFlash((f) => (f === id ? null : f)), 1600);
+  }
+
   async function remove(id: number) {
     if (!confirm(t.chat.deleteConfirm)) return;
     await fetch(`/api/chat/messages?id=${id}`, { method: "DELETE" });
@@ -503,6 +701,8 @@ export default function ChatApp({
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       send();
+    } else if (e.key === "Escape" && replyTo) {
+      setReplyTo(null);
     } else if (e.key === "ArrowUp" && !draft) {
       // Discord-like: edit my last message
       const mine = [...(list ?? [])].reverse().find((m) => m.author_id === me.id);
@@ -585,7 +785,7 @@ export default function ChatApp({
           {!connected && <span className="chat-offline">{t.chat.reconnecting}</span>}
         </header>
 
-        <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
+        <div className="chat-scroll" ref={scroller} onScroll={onScroll} onWheel={() => picker && setPicker(null)}>
           {list && !hasMore[activeId] && (
             <div className="chat-start">
               <strong>{active && t.chat.start(active.name)}</strong>
@@ -598,7 +798,11 @@ export default function ChatApp({
             const prev = list[i - 1];
             const newDay = !prev || !sameDay(prev.created_at, m.created_at);
             const grouped =
-              !newDay && prev && prev.author_id === m.author_id && m.created_at - prev.created_at < GROUP_MS;
+              !newDay &&
+              prev &&
+              m.reply_to === null &&
+              prev.author_id === m.author_id &&
+              m.created_at - prev.created_at < GROUP_MS;
             const mine = m.author_id === me.id;
             const isEditing = editing?.id === m.id;
             const refs = postIdsIn(m.content);
@@ -609,7 +813,25 @@ export default function ChatApp({
                     <span>{dayLabel(t, m.created_at)}</span>
                   </div>
                 )}
-                <div className={`chat-msg${grouped ? " grouped" : ""}${isEditing ? " editing" : ""}`}>
+                <div
+                  id={`chat-msg-${m.id}`}
+                  className={`chat-msg${grouped ? " grouped" : ""}${isEditing ? " editing" : ""}${
+                    m.reply?.author_id === me.id && !mine ? " to-me" : ""
+                  }${flash === m.id ? " flash" : ""}${replyTo?.id === m.id ? " replying" : ""}`}
+                >
+                  {m.reply_to !== null && (
+                    <div className="chat-reply">
+                      {m.reply ? (
+                        <button type="button" onClick={() => jumpTo(m.reply!.id)}>
+                          <Avatar name={m.reply.author_name} src={m.reply.author_avatar} size={16} />
+                          <strong>{m.reply.author_name}</strong>
+                          <span className={m.reply.content.trim() ? "" : "chat-reply-files"}>{replySnippet(t, m.reply)}</span>
+                        </button>
+                      ) : (
+                        <span className="chat-reply-deleted">{t.chat.replyDeleted}</span>
+                      )}
+                    </div>
+                  )}
                   <div className="chat-msg-gutter">
                     {grouped ? (
                       <time className="chat-msg-hover-time">{timeOf(t, m.created_at)}</time>
@@ -656,17 +878,62 @@ export default function ChatApp({
                         ))}
                       </div>
                     )}
+                    {m.reactions.length > 0 && (
+                      <div className="chat-reactions">
+                        {m.reactions.map((r) => (
+                          <button
+                            key={r.emoji}
+                            type="button"
+                            className={`chat-reaction${r.users.some((u) => u.id === me.id) ? " mine" : ""}`}
+                            title={t.chat.reactedBy(r.users.map((u) => u.name).join(", "), r.emoji)}
+                            onClick={() => react(m.id, r.emoji)}
+                          >
+                            <span className="chat-reaction-emoji">{r.emoji}</span>
+                            <span>{r.users.length}</span>
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="chat-reaction chat-reaction-add"
+                          data-emoji-anchor
+                          onClick={(e) => openPicker(m.id, e.currentTarget)}
+                          title={t.chat.react}
+                          aria-label={t.chat.react}
+                        >
+                          <SmileIcon />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {!isEditing && (mine || isOwner) && (
-                    <div className="chat-msg-actions">
+                  {!isEditing && (
+                    <div className={`chat-msg-actions${picker?.id === m.id ? " open" : ""}`}>
+                      {quick.map((e) => (
+                        <button key={e} type="button" className="chat-quick" onClick={() => react(m.id, e)} title={e}>
+                          {e}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        data-emoji-anchor
+                        onClick={(e) => openPicker(m.id, e.currentTarget)}
+                        title={t.chat.react}
+                        aria-label={t.chat.react}
+                      >
+                        <SmileIcon />
+                      </button>
+                      <button type="button" onClick={() => startReply(m)}>
+                        {t.chat.reply}
+                      </button>
                       {mine && (
                         <button type="button" onClick={() => setEditing({ id: m.id, text: m.content })}>
                           {t.chat.edit}
                         </button>
                       )}
-                      <button type="button" className="danger" onClick={() => remove(m.id)}>
-                        {t.chat.delete}
-                      </button>
+                      {(mine || isOwner) && (
+                        <button type="button" className="danger" onClick={() => remove(m.id)}>
+                          {t.chat.delete}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -718,6 +985,27 @@ export default function ChatApp({
               </li>
             ))}
           </ul>
+        )}
+
+        {replyTo && (
+          <div className="chat-replying">
+            <button type="button" className="chat-replying-text" onClick={() => jumpTo(replyTo.id)}>
+              <span>{t.chat.replyingTo(replyTo.author_name)}</span>
+              <span className="chat-replying-snippet">{replySnippet(t, replyTo)}</span>
+            </button>
+            <button
+              type="button"
+              className="chat-icon-btn"
+              onClick={() => {
+                setReplyTo(null);
+                composer.current?.focus();
+              }}
+              title={t.chat.cancelReply}
+              aria-label={t.chat.cancelReply}
+            >
+              ×
+            </button>
+          </div>
         )}
 
         <form
@@ -774,6 +1062,10 @@ export default function ChatApp({
           </button>
         </form>
       </section>
+
+      {picker && (
+        <EmojiPicker anchor={picker.anchor} onPick={pickEmoji} onClose={closePicker} placeholder={t.chat.otherEmoji} />
+      )}
 
       <aside className="chat-members">
         <div className="chat-side-title">

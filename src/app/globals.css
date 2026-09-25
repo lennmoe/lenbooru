@@ -1440,6 +1440,7 @@ html[data-safe] .card {
   padding: 4px 16px 4px 0;
   margin-top: 12px;
   position: relative;
+  transition: background 0.3s;
 }
 .chat-msg.grouped {
   margin-top: 0;
@@ -1522,6 +1523,197 @@ html[data-safe] .card {
 }
 .chat-msg-actions button.danger:hover {
   color: var(--danger);
+}
+.chat-msg-actions.open {
+  display: flex;
+}
+.chat-msg-actions button.chat-quick {
+  font-size: 1rem;
+  padding: 1px 5px;
+  line-height: 1.2;
+}
+.chat-msg-actions svg {
+  display: block;
+}
+.chat-msg.to-me {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.chat-msg.replying {
+  background: var(--bg-elev);
+  box-shadow: inset 2px 0 0 var(--accent-2);
+}
+.chat-msg.flash {
+  background: var(--bg-elev-2);
+}
+/* reply line above a message, with a "spine" from the avatar */
+.chat-reply {
+  grid-column: 1 / -1;
+  position: relative;
+  margin-left: 56px;
+  min-width: 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.chat-reply::before {
+  content: "";
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  width: 24px;
+  height: 11px;
+  border-left: 2px solid var(--border);
+  border-top: 2px solid var(--border);
+  border-top-left-radius: 6px;
+}
+.chat-reply button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.chat-reply button:hover span {
+  color: var(--text);
+}
+.chat-reply .avatar {
+  flex: none;
+  border-radius: 50%;
+  font-size: 0.55rem;
+}
+.chat-reply strong {
+  flex: none;
+  color: var(--text);
+  font-weight: 600;
+}
+.chat-reply button > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-reply-files,
+.chat-reply-deleted {
+  font-style: italic;
+}
+.chat-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.chat-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.chat-reaction:hover {
+  border-color: var(--border);
+}
+.chat-reaction.mine {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text);
+}
+.chat-reaction-emoji {
+  font-size: 1rem;
+  line-height: 1;
+}
+.chat-reaction-add {
+  opacity: 0;
+}
+.chat-msg:hover .chat-reaction-add,
+.chat-reaction-add:focus-visible {
+  opacity: 1;
+}
+.chat-emoji-picker {
+  position: fixed;
+  z-index: 50;
+  width: 312px;
+  max-width: calc(100vw - 16px);
+  padding: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.chat-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+}
+.chat-emoji-grid button {
+  aspect-ratio: 1;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.chat-emoji-grid button:hover {
+  background: var(--bg-elev-2);
+}
+.chat-emoji-picker input {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  outline: none;
+}
+.chat-emoji-picker input:focus {
+  border-color: var(--accent-2);
+}
+.chat-replying {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
+  padding: 6px 8px 6px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.chat-replying-text {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-replying-text > span:first-child {
+  flex: none;
+  color: var(--text);
+}
+.chat-replying-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .chat-edit textarea {
   width: 100%;

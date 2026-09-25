@@ -60,6 +60,16 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 
 CREATE INDEX IF NOT EXISTS idx_chat_messages_channel ON chat_messages(channel_id, id);
 
+-- one row per (message, user, emoji); removed with the message
+CREATE TABLE IF NOT EXISTS chat_reactions (
+  message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  user_name  TEXT NOT NULL DEFAULT '',
+  emoji      TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji)
+);
+
 -- chat attachments: uploaded first (message_id NULL), then attached when the message is sent
 CREATE TABLE IF NOT EXISTS chat_uploads (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -126,6 +136,13 @@ function migrate(db: Database.Database) {
   if (!tagCols.includes("category")) {
     // artist | copyright | character | general (see lib/tags.ts)
     db.exec("ALTER TABLE tags ADD COLUMN category TEXT NOT NULL DEFAULT 'general'");
+  }
+  const chatCols = (db.prepare("PRAGMA table_info(chat_messages)").all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!chatCols.includes("reply_to")) {
+    // id of the message answered; no FK so a reply keeps showing "deleted message"
+    db.exec("ALTER TABLE chat_messages ADD COLUMN reply_to INTEGER");
   }
 }
 

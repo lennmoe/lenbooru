@@ -13,6 +13,22 @@ export interface Channel {
   name: string;
 }
 
+/** Emojis on a message, in the order they were first added. */
+export interface Reaction {
+  emoji: string;
+  users: { id: string; name: string }[];
+}
+
+/** Short view of the message being answered (null when it was deleted). */
+export interface ReplyPreview {
+  id: number;
+  author_id: string;
+  author_name: string;
+  author_avatar: string;
+  content: string;
+  files: number;
+}
+
 export interface ChatMessage {
   id: number;
   channel_id: number;
@@ -22,14 +38,65 @@ export interface ChatMessage {
   content: string;
   created_at: number;
   edited_at: number | null;
+  reply_to: number | null;
+  reply: ReplyPreview | null;
   attachments: Attachment[];
+  reactions: Reaction[];
 }
 
-type MessageRow = Omit<ChatMessage, "attachments">;
+export const MAX_REACTIONS = 20;
+const REPLY_PREVIEW = 200;
 
-function withAttachments(rows: MessageRow[]): ChatMessage[] {
-  const map = attachmentsFor(rows.map((r) => r.id));
-  return rows.map((r) => ({ ...r, attachments: map.get(r.id) ?? [] }));
+type MessageRow = Omit<ChatMessage, "attachments" | "reactions" | "reply">;
+
+function placeholders(ids: unknown[]) {
+  return ids.map(() => "?").join(",");
+}
+
+function reactionsFor(messageIds: number[]): Map<number, Reaction[]> {
+  const map = new Map<number, Reaction[]>();
+  if (!messageIds.length) return map;
+  const rows = getDb()
+    .prepare(
+      `SELECT message_id, emoji, user_id, user_name FROM chat_reactions
+       WHERE message_id IN (${placeholders(messageIds)}) ORDER BY created_at, rowid`
+    )
+    .all(...messageIds) as { message_id: number; emoji: string; user_id: string; user_name: string }[];
+  for (const r of rows) {
+    const list = map.get(r.message_id) ?? [];
+    map.set(r.message_id, list);
+    let group = list.find((x) => x.emoji === r.emoji);
+    if (!group) list.push((group = { emoji: r.emoji, users: [] }));
+    group.users.push({ id: r.user_id, name: r.user_name });
+  }
+  return map;
+}
+
+function repliesFor(ids: number[]): Map<number, ReplyPreview> {
+  const map = new Map<number, ReplyPreview>();
+  if (!ids.length) return map;
+  const rows = getDb()
+    .prepare(
+      `SELECT m.id, m.author_id, m.author_name, m.author_avatar, substr(m.content, 1, ${REPLY_PREVIEW}) AS content,
+              (SELECT COUNT(*) FROM chat_uploads u WHERE u.message_id = m.id) AS files
+       FROM chat_messages m WHERE m.id IN (${placeholders(ids)})`
+    )
+    .all(...ids) as ReplyPreview[];
+  for (const r of rows) map.set(r.id, r);
+  return map;
+}
+
+function enrich(rows: MessageRow[]): ChatMessage[] {
+  const ids = rows.map((r) => r.id);
+  const files = attachmentsFor(ids);
+  const reactions = reactionsFor(ids);
+  const replies = repliesFor([...new Set(rows.map((r) => r.reply_to).filter((x): x is number => x !== null))]);
+  return rows.map((r) => ({
+    ...r,
+    reply: r.reply_to !== null ? (replies.get(r.reply_to) ?? null) : null,
+    attachments: files.get(r.id) ?? [],
+    reactions: reactions.get(r.id) ?? [],
+  }));
 }
 
 /** "Mon Salon!" -> "mon-salon" (Discord-style channel names). */
@@ -84,20 +151,22 @@ export function listMessages(channelId: number, before: number | null, limit = 5
        ORDER BY id DESC LIMIT @limit`
     )
     .all({ channelId, before, limit }) as MessageRow[];
-  return withAttachments(rows.reverse());
+  return enrich(rows.reverse());
 }
 
 export function getMessage(id: number): ChatMessage | null {
   const row = getDb().prepare("SELECT * FROM chat_messages WHERE id = ?").get(id) as MessageRow | undefined;
-  return row ? withAttachments([row])[0] : null;
+  return row ? enrich([row])[0] : null;
 }
 
-export function addMessage(m: Omit<ChatMessage, "id" | "created_at" | "edited_at" | "attachments">): ChatMessage {
+export function addMessage(
+  m: Omit<ChatMessage, "id" | "created_at" | "edited_at" | "attachments" | "reactions" | "reply">
+): ChatMessage {
   const db = getDb();
   const info = db
     .prepare(
-      `INSERT INTO chat_messages (channel_id, author_id, author_name, author_avatar, content, created_at)
-       VALUES (@channel_id, @author_id, @author_name, @author_avatar, @content, @created_at)`
+      `INSERT INTO chat_messages (channel_id, author_id, author_name, author_avatar, content, reply_to, created_at)
+       VALUES (@channel_id, @author_id, @author_name, @author_avatar, @content, @reply_to, @created_at)`
     )
     .run({ ...m, created_at: Date.now() });
   return getMessage(Number(info.lastInsertRowid))!;
@@ -110,6 +179,27 @@ export function editMessage(id: number, content: string): ChatMessage | null {
 
 export function deleteMessage(id: number): boolean {
   return getDb().prepare("DELETE FROM chat_messages WHERE id = ?").run(id).changes > 0;
+}
+
+/** Adds or removes `user`'s `emoji` on a message; returns the new reactions, or null if refused. */
+export function toggleReaction(messageId: number, user: { id: string; name: string }, emoji: string): Reaction[] | null {
+  const db = getDb();
+  const removed = db
+    .prepare("DELETE FROM chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?")
+    .run(messageId, user.id, emoji).changes;
+  if (!removed) {
+    const known = db.prepare("SELECT 1 FROM chat_reactions WHERE message_id = ? AND emoji = ?").get(messageId, emoji);
+    if (!known) {
+      const { n } = db
+        .prepare("SELECT COUNT(DISTINCT emoji) AS n FROM chat_reactions WHERE message_id = ?")
+        .get(messageId) as { n: number };
+      if (n >= MAX_REACTIONS) return null;
+    }
+    db.prepare(
+      "INSERT INTO chat_reactions (message_id, user_id, user_name, emoji, created_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(messageId, user.id, user.name, emoji, Date.now());
+  }
+  return reactionsFor([messageId]).get(messageId) ?? [];
 }
 
 /** Trim and cap a message ("" when empty — fine if the message has attachments). */

@@ -1,6 +1,6 @@
 /**
  * In-memory fan-out for the chat: every open /api/chat/stream (Server-Sent
- * Events) is a subscriber; new / edited / deleted messages, typing and presence
+ * Events) is a subscriber; new / edited / deleted messages, reactions, typing and presence
  * are pushed to all of them. Lives on globalThis so dev hot-reloads and the
  * different route modules share one hub.
  */
@@ -15,6 +15,7 @@ export type ChatEvent =
   | { type: "message"; message: unknown }
   | { type: "edit"; message: unknown }
   | { type: "delete"; id: number; channel_id: number }
+  | { type: "reactions"; id: number; channel_id: number; reactions: unknown }
   | { type: "typing"; channel_id: number; user: ChatUser }
   | { type: "presence"; users: ChatUser[] }
   | { type: "channels" };

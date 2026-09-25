@@ -240,6 +240,15 @@ const fr = {
     processing: "traitement…",
     tooLarge: (name: string) => `« ${name} » dépasse 250 Mo`,
     badType: (name: string) => `« ${name} » : seulement images, GIF et vidéos`,
+    reply: "Répondre",
+    replyingTo: (name: string) => `Réponse à ${name}`,
+    cancelReply: "Annuler la réponse (Échap)",
+    replyDeleted: "Message original supprimé",
+    replyFiles: "Pièce jointe",
+    react: "Ajouter une réaction",
+    reactedBy: (names: string, emoji: string) => `${names} : ${emoji}`,
+    otherEmoji: "Autre emoji… (Win + .)",
+    tooManyReactions: "Trop de réactions différentes sur ce message",
   },
 
   admin: {
@@ -557,6 +566,15 @@ const en: Dict = {
     processing: "processing…",
     tooLarge: (name) => `"${name}" is over 250 MB`,
     badType: (name) => `"${name}": only images, GIFs and videos`,
+    reply: "Reply",
+    replyingTo: (name) => `Replying to ${name}`,
+    cancelReply: "Cancel reply (Escape)",
+    replyDeleted: "Original message was deleted",
+    replyFiles: "Attachment",
+    react: "Add reaction",
+    reactedBy: (names, emoji) => `${names}: ${emoji}`,
+    otherEmoji: "Any emoji… (Win + .)",
+    tooManyReactions: "Too many different reactions on this message",
   },
 
   admin: {
