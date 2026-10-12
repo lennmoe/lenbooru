@@ -1,4 +1,5 @@
 import {
+  ActivityType,
   ApplicationCommandType,
   ApplicationIntegrationType,
   Client,
@@ -14,6 +15,7 @@ import {
   type User,
   type UserContextMenuCommandInteraction,
 } from "discord.js";
+import { countPosts, getDb } from "./db";
 import { ROLE_LABEL, type Role } from "./perms";
 import { OWNER_ID, listUsers, removeUser, resolveRole, setUser } from "./users";
 
@@ -74,6 +76,34 @@ const commands = [
 
 function siteUrl(): string {
   return process.env.AUTH_URL?.trim() || "http://localhost:3000";
+}
+
+// rotating custom status: post count, tag count, site address
+const ACTIVITY_EVERY = 30_000;
+
+function activities(): string[] {
+  const posts = countPosts();
+  const tags = (getDb().prepare("SELECT COUNT(*) AS n FROM tags").get() as { n: number }).n;
+  const fmt = (n: number) => n.toLocaleString("fr-FR");
+  return [
+    `${fmt(posts)} post${posts > 1 ? "s" : ""} sur lenbooru`,
+    `${fmt(tags)} tag${tags > 1 ? "s" : ""}`,
+    `${siteUrl().replace(/^https?:\/\//, "")}`,
+  ];
+}
+
+function startActivity(c: Client<true>) {
+  let i = 0;
+  const tick = () => {
+    try {
+      const list = activities();
+      c.user.setActivity({ type: ActivityType.Custom, name: "lenbooru", state: list[i++ % list.length] });
+    } catch (e) {
+      console.error("[bot] activité", e);
+    }
+  };
+  tick();
+  setInterval(tick, ACTIVITY_EVERY).unref();
 }
 
 async function notify(user: User, role: Role) {
@@ -179,6 +209,7 @@ export function startBot() {
 
   client.once(Events.ClientReady, async (c) => {
     console.log(`[bot] connecté en tant que ${c.user.tag}`);
+    startActivity(c);
     try {
       await c.application.commands.set(commands);
     } catch (e) {
