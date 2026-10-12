@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canManageUsers, canUpload } from "@/lib/perms";
@@ -8,7 +7,7 @@ import LangToggle from "@/components/LangToggle";
 import ThemeToggle from "@/components/ThemeToggle";
 import SafeModeToggle from "@/components/SafeModeToggle";
 import UserMenu from "@/components/UserMenu";
-import TagSearch from "@/components/TagSearch";
+import NavLinks from "@/components/NavLinks";
 
 /**
  * Layout de toutes les pages réservées aux membres. Le rôle est relu en base à
@@ -28,41 +27,27 @@ export default async function BoardLayout({
   if (!role) redirect("/denied");
   const t = await getT();
 
+  const nav = [
+    { href: "/", label: t.header.posts },
+    ...(canUpload(role) ? [{ href: "/upload", label: t.header.upload }] : []),
+    { href: "/chat", label: t.header.chat },
+    ...(canManageUsers(role) ? [{ href: "/admin", label: t.header.admin }] : []),
+  ];
+
   return (
     <>
       <header className="site-header">
         <Link href="/" className="brand">
           lenbooru
         </Link>
-        <Suspense
-          fallback={
-            <form action="/" method="get" className="tag-search">
-              <input type="search" name="tags" placeholder={t.header.searchPlaceholder} />
-            </form>
-          }
-        >
-          <TagSearch />
-        </Suspense>
+        <NavLinks items={nav} />
 
-        {canUpload(role) && (
-          <Link href="/upload" className="btn btn-accent">
-            {t.header.upload}
-          </Link>
-        )}
-        <Link href="/chat" className="btn">
-          {t.header.chat}
-        </Link>
-        {canManageUsers(role) && (
-          <Link href="/admin" className="btn">
-            {t.header.admin}
-          </Link>
-        )}
-
-        <SafeModeToggle />
-        <LangToggle />
-        <ThemeToggle />
-
-        <UserMenu name={user.name || "?"} image={user.image ?? null} role={role} />
+        <div className="header-tools">
+          <SafeModeToggle />
+          <LangToggle />
+          <ThemeToggle />
+          <UserMenu name={user.name || "?"} image={user.image ?? null} role={role} />
+        </div>
       </header>
       {children}
     </>

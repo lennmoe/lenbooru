@@ -191,10 +191,11 @@ function attachTags(row: PostRow): Post {
   return { ...row, tags };
 }
 
-export function listPosts(opts: ListOpts = {}): Post[] {
-  const { type = null, tags = [], rating = null, offset = 0, limit = PAGE_SIZE } = opts;
+/** WHERE clause shared by every query that filters posts like the gallery. */
+function postFilter(opts: ListOpts): { where: string; params: Record<string, unknown> } {
+  const { type = null, tags = [], rating = null } = opts;
   const where: string[] = [];
-  const params: Record<string, unknown> = { offset, limit };
+  const params: Record<string, unknown> = {};
 
   if (type) {
     where.push("p.type = @type");
@@ -214,14 +215,19 @@ export function listPosts(opts: ListOpts = {}): Post[] {
     )`);
     tags.forEach((t, i) => (params[`tag${i}`] = t));
   }
+  return { where: where.length ? "WHERE " + where.join(" AND ") : "", params };
+}
 
+export function listPosts(opts: ListOpts = {}): Post[] {
+  const { offset = 0, limit = PAGE_SIZE } = opts;
+  const { where, params } = postFilter(opts);
   const sql = `
     SELECT p.* FROM posts p
-    ${where.length ? "WHERE " + where.join(" AND ") : ""}
+    ${where}
     ORDER BY p.created_at DESC, p.id DESC
     LIMIT @limit OFFSET @offset
   `;
-  const rows = getDb().prepare(sql).all(params) as PostRow[];
+  const rows = getDb().prepare(sql).all({ ...params, offset, limit }) as PostRow[];
   return rows.map(attachTags);
 }
 
@@ -301,44 +307,28 @@ export function getDoujinPages(id: number): DoujinPage[] {
     .all(id) as DoujinPage[];
 }
 
-export function popularTags(limit = 40): TagInfo[] {
+/**
+ * Most used tags among the posts matching a gallery search (all posts when
+ * unfiltered), for the sidebar — like Danbooru's tag list.
+ */
+export function searchResultTags(opts: ListOpts = {}, limit = 25): TagInfo[] {
+  const { where, params } = postFilter(opts);
   return getDb()
     .prepare(
-      `SELECT t.name, t.category, COUNT(pt.post_id) AS count
-       FROM tags t JOIN post_tags pt ON pt.tag_id = t.id
-       GROUP BY t.id ORDER BY count DESC, t.name LIMIT ?`
+      `SELECT t.name, t.category, COUNT(*) AS count
+       FROM posts p
+       JOIN post_tags pt ON pt.post_id = p.id
+       JOIN tags t ON t.id = pt.tag_id
+       ${where}
+       GROUP BY t.id ORDER BY count DESC, t.name LIMIT @limit`
     )
-    .all(limit) as TagInfo[];
+    .all({ ...params, limit }) as TagInfo[];
 }
 
 export function countPosts(opts: ListOpts = {}): number {
-  const { type = null, tags = [], rating = null } = opts;
-  const where: string[] = [];
-  const params: Record<string, unknown> = {};
-  if (type) {
-    where.push("p.type = @type");
-    params.type = type;
-  }
-  if (rating) {
-    where.push("p.rating = @rating");
-    params.rating = rating;
-  }
-  if (tags.length) {
-    where.push(`p.id IN (
-      SELECT pt.post_id FROM post_tags pt
-      JOIN tags t ON t.id = pt.tag_id
-      WHERE t.name IN (${tags.map((_, i) => `@tag${i}`).join(",")})
-      GROUP BY pt.post_id
-      HAVING COUNT(DISTINCT t.name) = ${tags.length}
-    )`);
-    tags.forEach((t, i) => (params[`tag${i}`] = t));
-  }
+  const { where, params } = postFilter(opts);
   const row = getDb()
-    .prepare(
-      `SELECT COUNT(*) AS n FROM posts p ${
-        where.length ? "WHERE " + where.join(" AND ") : ""
-      }`
-    )
+    .prepare(`SELECT COUNT(*) AS n FROM posts p ${where}`)
     .get(params) as { n: number };
   return row.n;
 }

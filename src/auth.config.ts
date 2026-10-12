@@ -12,6 +12,9 @@ export const authConfig: NextAuthConfig = {
     Discord({
       clientId: process.env.AUTH_DISCORD_ID,
       clientSecret: process.env.AUTH_DISCORD_SECRET,
+      // Discord now sends `iss` on the OAuth callback; without this Auth.js
+      // compares it to its "https://authjs.dev" placeholder and rejects it.
+      issuer: "https://discord.com",
       authorization: { params: { scope: "identify" } },
     }),
   ],

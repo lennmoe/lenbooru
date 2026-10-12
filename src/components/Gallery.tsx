@@ -8,11 +8,12 @@ import { useT } from "./I18nProvider";
 interface Props {
   initial: Post[];
   type: string | null;
-  tags: string[];
+  /** search box string, rating filter included */
+  query: string;
   pageSize: number;
 }
 
-export default function Gallery({ initial, type, tags, pageSize }: Props) {
+export default function Gallery({ initial, type, query, pageSize }: Props) {
   const t = useT();
   const [posts, setPosts] = useState<Post[]>(initial);
   const [offset, setOffset] = useState(initial.length);
@@ -32,7 +33,7 @@ export default function Gallery({ initial, type, tags, pageSize }: Props) {
     setLoading(true);
     const qs = new URLSearchParams();
     if (type) qs.set("type", type);
-    if (tags.length) qs.set("tags", tags.join(" "));
+    if (query) qs.set("tags", query);
     qs.set("offset", String(offset));
     qs.set("limit", String(pageSize));
     try {
@@ -44,7 +45,7 @@ export default function Gallery({ initial, type, tags, pageSize }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [loading, done, type, tags, offset, pageSize]);
+  }, [loading, done, type, query, offset, pageSize]);
 
   useEffect(() => {
     const el = sentinel.current;

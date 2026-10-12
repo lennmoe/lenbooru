@@ -2,19 +2,13 @@
 
 import { useRef, useState } from "react";
 import type { TagCategory } from "@/lib/tags";
-import { displayTag, parseTag } from "@/lib/tags";
+import { displayTag, fmtCount, parseTag } from "@/lib/tags";
 import { useT } from "./I18nProvider";
 
 interface Suggestion {
   name: string;
   category: TagCategory;
   count: number;
-}
-
-function fmtCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
-  return String(n);
 }
 
 /** The token being typed: from the last space / comma / newline before the caret to the caret. */

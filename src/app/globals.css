@@ -1,15 +1,18 @@
 :root {
-  --radius: 12px;
-  --bg: #0e0f13;
-  --bg-elev: #171922;
-  --bg-elev-2: #1f2230;
-  --border: #2a2e3c;
-  --text: #e7e9ee;
-  --text-dim: #969cad;
-  --accent: #ff5c8a;
-  --accent-2: #6c8cff;
-  --accent-soft: #241820;
-  --header-bg: rgba(14, 15, 19, 0.85);
+  --radius: 4px;
+  --header-h: 46px;
+  --side-w: 250px;
+  --bg: #1b1b28;
+  --bg-elev: #242436;
+  --bg-elev-2: #2e2e45;
+  --border: #3a3a56;
+  --text: #e6e6ef;
+  --text-dim: #9898b0;
+  --brand: #ff5c8a;
+  --accent: #009be6;
+  --accent-2: #009be6;
+  --accent-soft: #1b2a3c;
+  --header-bg: #242436;
   --danger: #ff7a95;
   --danger-text: #ff9db1;
   --danger-bg: #2a1119;
@@ -22,22 +25,26 @@
   --tag-copyright: #c797ff;
   --tag-character: #35c64a;
   --tag-general: var(--accent-2);
+  --type-video: #4aa8ff;
+  --type-gif: #35c64a;
+  --type-doujin: #f5b335;
   color-scheme: dark;
 }
 
 /* Theme: cookie "theme" sets data-theme on <html> (see app/layout.tsx);
    without it, follow the OS preference. */
 :root[data-theme="light"] {
-  --bg: #f4f5f8;
-  --bg-elev: #ffffff;
-  --bg-elev-2: #eceef3;
-  --border: #dcdfe7;
-  --text: #1b1d24;
-  --text-dim: #5f6576;
-  --accent: #e0356b;
-  --accent-2: #3d63e0;
-  --accent-soft: #fde8ef;
-  --header-bg: rgba(255, 255, 255, 0.88);
+  --bg: #ffffff;
+  --bg-elev: #f3f4f8;
+  --bg-elev-2: #e7e9f1;
+  --border: #d3d6e2;
+  --text: #1f2029;
+  --text-dim: #636878;
+  --brand: #e0356b;
+  --accent: #0073ff;
+  --accent-2: #0073ff;
+  --accent-soft: #e6f0ff;
+  --header-bg: #f3f4f8;
   --danger: #d02b58;
   --danger-text: #b3214a;
   --danger-bg: #fdecf0;
@@ -46,37 +53,44 @@
   --ok-bg: #e5f6ec;
   --ok-border: #9fd8b6;
   --discord-soft: #4752c4;
-  --tag-artist: #c0002a;
+  --tag-artist: #c00004;
   --tag-copyright: #a800aa;
-  --tag-character: #00922a;
+  --tag-character: #00ab2c;
   --tag-general: var(--accent-2);
+  --type-video: #0073ff;
+  --type-gif: #00ab2c;
+  --type-doujin: #e08a00;
   color-scheme: light;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-  --bg: #f4f5f8;
-  --bg-elev: #ffffff;
-  --bg-elev-2: #eceef3;
-  --border: #dcdfe7;
-  --text: #1b1d24;
-  --text-dim: #5f6576;
-  --accent: #e0356b;
-  --accent-2: #3d63e0;
-  --accent-soft: #fde8ef;
-  --header-bg: rgba(255, 255, 255, 0.88);
-  --danger: #d02b58;
-  --danger-text: #b3214a;
-  --danger-bg: #fdecf0;
-  --danger-border: #f1b5c5;
-  --ok-text: #1c7a45;
-  --ok-bg: #e5f6ec;
-  --ok-border: #9fd8b6;
-  --discord-soft: #4752c4;
-  --tag-artist: #c0002a;
-  --tag-copyright: #a800aa;
-  --tag-character: #00922a;
-  --tag-general: var(--accent-2);
-  color-scheme: light;
+    --bg: #ffffff;
+    --bg-elev: #f3f4f8;
+    --bg-elev-2: #e7e9f1;
+    --border: #d3d6e2;
+    --text: #1f2029;
+    --text-dim: #636878;
+    --brand: #e0356b;
+    --accent: #0073ff;
+    --accent-2: #0073ff;
+    --accent-soft: #e6f0ff;
+    --header-bg: #f3f4f8;
+    --danger: #d02b58;
+    --danger-text: #b3214a;
+    --danger-bg: #fdecf0;
+    --danger-border: #f1b5c5;
+    --ok-text: #1c7a45;
+    --ok-bg: #e5f6ec;
+    --ok-border: #9fd8b6;
+    --discord-soft: #4752c4;
+    --tag-artist: #c00004;
+    --tag-copyright: #a800aa;
+    --tag-character: #00ab2c;
+    --tag-general: var(--accent-2);
+    --type-video: #0073ff;
+    --type-gif: #00ab2c;
+    --type-doujin: #e08a00;
+    color-scheme: light;
   }
 }
 
@@ -84,14 +98,18 @@
   box-sizing: border-box;
 }
 
+html {
+  /* dense, Danbooru-like: every rem in this file scales from here */
+  font-size: 14px;
+}
 html,
 body {
   padding: 0;
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    Helvetica, Arial, sans-serif;
+  font-family: Verdana, Tahoma, "DejaVu Sans", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.4;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -120,42 +138,110 @@ textarea {
   top: 0;
   z-index: 20;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  align-items: stretch;
+  gap: 18px;
+  height: var(--header-h);
+  padding: 0 14px;
   background: var(--header-bg);
-  backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
 }
 
 .brand {
-  font-weight: 800;
-  font-size: 1.15rem;
-  letter-spacing: 0.5px;
-  color: var(--accent);
+  align-self: center;
+  font-weight: 700;
+  font-size: 1.35rem;
+  letter-spacing: -0.5px;
+  color: var(--brand);
   white-space: nowrap;
 }
 
-.site-header form {
-  position: relative;
-  flex: 1 1 200px;
+/* Posts / Upload / Chat / Admin tabs (NavLinks) */
+.main-nav {
   display: flex;
-  gap: 8px;
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.main-nav a {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--accent-2);
+  white-space: nowrap;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+}
+.main-nav a:hover {
+  background: var(--bg-elev-2);
+}
+.main-nav a.active {
+  color: var(--text);
+  font-weight: 700;
+  border-bottom-color: var(--accent);
 }
 
-.site-header input[type="search"] {
-  flex: 1;
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .brand {
+    font-size: 1.1rem;
+  }
+  .main-nav a {
+    padding: 0 8px;
+  }
+  .header-tools {
+    gap: 4px;
+  }
+  /* iOS zooms into fields under 16px */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* ---------- search box (sidebar) ---------- */
+.tag-search {
+  position: relative;
+  display: flex;
   min-width: 0;
-  background: var(--bg-elev);
+}
+.tag-search input[type="search"] {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 14px;
+  border-right: none;
+  border-radius: var(--radius) 0 0 var(--radius);
+  padding: 6px 8px;
   outline: none;
 }
-.site-header input[type="search"]:focus {
+.tag-search input[type="search"]:focus {
   border-color: var(--accent-2);
+}
+.tag-search button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.tag-search button:hover {
+  color: var(--accent-2);
 }
 
 .btn {
@@ -165,8 +251,8 @@ textarea {
   gap: 6px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 8px 16px;
+  border-radius: var(--radius);
+  padding: 6px 14px;
   cursor: pointer;
   white-space: nowrap;
   transition: border-color 0.15s, background 0.15s;
@@ -213,63 +299,120 @@ a.btn-discord-outline:hover {
 
 main {
   padding: 14px;
-  max-width: 1600px;
+  max-width: 1800px;
   margin: 0 auto;
 }
 
-/* ---------- chips / filters ---------- */
-.chips {
+/* ---------- gallery: sidebar + thumbnails ---------- */
+.board {
+  display: grid;
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.board-main {
+  min-width: 0;
+}
+.side-section {
+  margin-bottom: 18px;
+}
+.side-section h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+.side-list,
+.side-tags {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 14px;
+  flex-direction: column;
+  gap: 2px;
 }
-.chip {
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 0.85rem;
-  cursor: pointer;
+.side-list a,
+.side-tag-name {
+  color: var(--accent-2);
 }
-.chip.active {
-  background: var(--accent-2);
-  border-color: var(--accent-2);
-  color: #fff;
+.side-list a:hover,
+.side-tag-name:hover {
+  text-decoration: underline;
 }
-.chip .count {
+.side-list a.active {
+  color: var(--text);
+  font-weight: 700;
+}
+.side-tags li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.side-tag-op {
+  flex: none;
+  width: 1.1em;
+  text-align: center;
   color: var(--text-dim);
-  margin-left: 4px;
 }
-.chip.active .count {
-  color: rgba(255, 255, 255, 0.75);
+.side-tag-op:hover {
+  color: var(--accent-2);
+}
+.side-tag-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.side-tags .count {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 0.85em;
+}
+/* phone: search on top, thumbnails, then the rest of the sidebar */
+@media (max-width: 899px) {
+  .board {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .board-side {
+    display: contents;
+  }
+  .board-side .side-section {
+    order: 2;
+  }
+  .board-side .side-section:first-child {
+    order: 0;
+  }
+  .board-main {
+    order: 1;
+    width: 100%;
+    margin-bottom: 18px;
+  }
+  .side-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
 }
 
 /* ---------- grid ---------- */
-/* Justified rows: every card keeps its real aspect ratio (--r = width / height,
-   set by PostCard) and grows to fill the row, in upload order. */
+/* Danbooru-style fixed cells: each thumbnail keeps its ratio inside a square box. */
 .grid {
-  --row-h: 170px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  --thumb: 180px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--thumb), 1fr));
+  gap: 12px 8px;
 }
-@media (min-width: 700px) {
+@media (max-width: 640px) {
   .grid {
-    --row-h: 240px;
+    --thumb: 108px;
+    gap: 8px 4px;
   }
 }
-/* keeps the last, incomplete row at its natural height instead of stretching it */
-.grid::after {
-  content: "";
-  flex-grow: 1000000;
-}
 
+/* base card (also the post previews in chat): media fills the box */
 .card {
   position: relative;
   display: block;
-  flex: var(--r) 1 calc(var(--r) * var(--row-h));
-  aspect-ratio: var(--r);
   min-width: 0;
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -282,15 +425,55 @@ main {
   height: 100%;
   object-fit: cover;
 }
+
+.grid .card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--thumb);
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+/* shrinks to the media so the type outline and the badges sit on the picture */
+.grid .thumb {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: 3px;
+  line-height: 0;
+}
+.grid .thumb :is(img, video) {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--thumb);
+  object-fit: contain;
+}
+/* video / gif / doujin: coloured frame, like Danbooru's parent/child borders */
+.grid :is(.card-video, .card-gif, .card-doujin) .thumb {
+  outline: 2px solid var(--type-color);
+  outline-offset: -2px;
+}
+.card-video { --type-color: var(--type-video); }
+.card-gif { --type-color: var(--type-gif); }
+.card-doujin { --type-color: var(--type-doujin); }
+.grid .card:hover .thumb {
+  opacity: 0.85;
+}
+
 .card .badge {
   position: absolute;
   top: 6px;
   left: 6px;
   background: rgba(0, 0, 0, 0.7);
-  border-radius: 6px;
-  padding: 2px 7px;
-  font-size: 0.72rem;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.68rem;
   font-weight: 600;
+  line-height: 1.4;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: #fff;
@@ -309,9 +492,10 @@ main {
   bottom: 6px;
   right: 6px;
   background: rgba(0, 0, 0, 0.7);
-  border-radius: 6px;
-  padding: 2px 7px;
-  font-size: 0.72rem;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 0.68rem;
+  line-height: 1.4;
   color: #fff;
 }
 .card .play {
@@ -350,8 +534,8 @@ main {
 }
 @media (min-width: 900px) {
   .post-layout {
-    grid-template-columns: 280px minmax(0, 1fr);
-    gap: 32px;
+    grid-template-columns: var(--side-w) minmax(0, 1fr);
+    gap: 24px;
     align-items: start;
   }
   .post-side,
@@ -371,7 +555,7 @@ main {
 .post-nav .off {
   display: inline-flex;
   padding: 6px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--accent-2);
 }
 .post-nav a:hover {
@@ -499,14 +683,14 @@ main {
 .doujin-cover img {
   max-height: 60vh;
   width: auto;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 .tag {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 10px;
+  border-radius: var(--radius);
+  padding: 3px 8px;
   font-size: 0.8rem;
 }
 .tag:hover {
@@ -522,7 +706,7 @@ main {
 }
 .cover-row a {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
   aspect-ratio: 3 / 4;
 }
@@ -618,7 +802,7 @@ main {
 .field textarea {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   outline: none;
 }
@@ -655,7 +839,7 @@ main {
 }
 .msg {
   padding: 10px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   font-size: 0.9rem;
 }
 .msg.err {
@@ -703,7 +887,7 @@ main {
   display: block;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 10px;
   font-size: 1rem;
   letter-spacing: 0.5px;
@@ -719,9 +903,9 @@ main {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
-  padding: 0 10px 0 5px;
-  border-radius: 999px;
+  height: 32px;
+  padding: 0 8px 0 4px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--bg-elev);
   cursor: pointer;
@@ -801,7 +985,7 @@ main {
   width: 100%;
   padding: 9px 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: none;
   cursor: pointer;
   font-size: 0.9rem;
@@ -844,7 +1028,7 @@ main {
 .member-list select {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
 }
 .role-hint {
@@ -867,7 +1051,7 @@ main {
   flex-wrap: wrap;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
 }
 .member-main {
@@ -894,7 +1078,7 @@ main {
 .job {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -995,9 +1179,9 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--bg-elev);
   color: var(--text-dim);
@@ -1036,7 +1220,6 @@ main {
 .tag-copyright { color: var(--tag-copyright) !important; }
 .tag-character { color: var(--tag-character) !important; }
 .tag-general { color: var(--tag-general) !important; }
-.chip.tag-general { color: inherit !important; }
 
 .post-tag-group h3 {
   font-size: 0.9rem;
@@ -1063,7 +1246,7 @@ main {
   padding: 4px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   max-height: 60vh;
   overflow-y: auto;
@@ -1074,7 +1257,7 @@ main {
   align-items: baseline;
   gap: 12px;
   padding: 7px 10px;
-  border-radius: 7px;
+  border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.9rem;
 }
@@ -1103,7 +1286,7 @@ main {
 .ac-wrap textarea {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   outline: none;
   resize: vertical;
@@ -1118,7 +1301,7 @@ main {
 }
 .post-section h3,
 .post-tag-group h3 {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 700;
   margin: 0 0 6px;
 }
@@ -1178,7 +1361,7 @@ main {
 }
 .rating-switch button {
   padding: 9px 4px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--bg-elev);
   cursor: pointer;
@@ -1215,7 +1398,7 @@ main {
 .field .ac-wrap input[type="search"] {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 10px 12px;
   outline: none;
 }
@@ -1231,7 +1414,7 @@ main {
 .sample-notice {
   margin: 0 0 8px;
   padding: 6px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--accent-soft);
   border: 1px solid var(--border);
   font-size: 0.85rem;
@@ -1314,7 +1497,7 @@ html[data-safe] .card {
 .chat-channels li {
   display: flex;
   align-items: center;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 .chat-channels li > button:first-child {
   flex: 1;
@@ -1502,7 +1685,7 @@ html[data-safe] .card {
   gap: 2px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 2px;
 }
 .chat-msg:hover .chat-msg-actions {
@@ -1615,7 +1798,7 @@ html[data-safe] .card {
   padding: 0 8px;
   background: var(--bg-elev-2);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius);
   color: var(--text-dim);
   font-size: 0.8rem;
   font-weight: 600;
@@ -1648,7 +1831,7 @@ html[data-safe] .card {
   padding: 8px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 .chat-emoji-grid {
@@ -1660,7 +1843,7 @@ html[data-safe] .card {
   aspect-ratio: 1;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
@@ -1673,7 +1856,7 @@ html[data-safe] .card {
   margin-top: 8px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 6px 8px;
   outline: none;
 }
@@ -1720,7 +1903,7 @@ html[data-safe] .card {
   min-height: 44px;
   background: var(--bg-elev-2);
   border: 1px solid var(--accent-2);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 8px 10px;
   resize: vertical;
   outline: none;
@@ -1736,11 +1919,9 @@ html[data-safe] .card {
   margin-top: 6px;
 }
 .chat-post.card {
-  --r: 1;
   width: 160px;
   height: 160px;
   flex: none;
-  aspect-ratio: auto;
 }
 .chat-post-label {
   position: absolute;
@@ -1785,7 +1966,7 @@ html[data-safe] .card {
   field-sizing: content;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 11px 14px;
   outline: none;
   line-height: 1.35;
@@ -1798,7 +1979,7 @@ html[data-safe] .card {
   align-items: center;
   gap: 10px;
   padding: 5px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 .chat-members li:hover {
   background: var(--bg-elev-2);
@@ -1925,7 +2106,7 @@ html[data-safe] .card {
 .admin-table select {
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 8px 10px;
   outline: none;
 }
@@ -2002,7 +2183,7 @@ html[data-safe] .card {
   width: 56px;
   height: 56px;
   aspect-ratio: auto;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 .admin-actions {
   display: flex;
@@ -2030,7 +2211,7 @@ html[data-safe] .card {
 }
 .chat-attach {
   display: block;
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-elev-2);
   max-width: min(420px, 100%);
@@ -2062,7 +2243,7 @@ html[data-safe] .chat-attach:hover :is(img, video) {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--bg-elev-2);
   color: var(--text-dim);
@@ -2086,7 +2267,7 @@ html[data-safe] .chat-attach:hover :is(img, video) {
   align-items: center;
   gap: 4px 10px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--bg-elev);
   border: 1px solid var(--border);
   font-size: 0.85rem;

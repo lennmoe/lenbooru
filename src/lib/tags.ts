@@ -68,6 +68,13 @@ export function displayTag(name: string): string {
   return name.replace(/_/g, " ");
 }
 
+/** Compact tag count, like Danbooru: 950, 1.2k, 3M. */
+export function fmtCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return String(n);
+}
+
 /** Danbooru ratings: general, sensitive, questionable, explicit. "" = not rated. */
 export type Rating = "g" | "s" | "q" | "e";
 export const RATINGS: Rating[] = ["g", "s", "q", "e"];

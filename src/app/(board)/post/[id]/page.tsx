@@ -5,6 +5,7 @@ import { currentRole } from "@/lib/session";
 import { canDelete, canEdit } from "@/lib/perms";
 import DeleteButton from "@/components/DeleteButton";
 import PostView from "@/components/PostView";
+import SidebarSearch from "@/components/SidebarSearch";
 import CopyShareLink from "@/components/CopyShareLink";
 import SampleImage from "@/components/SampleImage";
 import { hasSample, samplePercent } from "@/lib/media";
@@ -203,6 +204,7 @@ export default async function PostPage({
   return (
     <main>
       <PostView
+        search={<SidebarSearch />}
         newer={newer}
         older={older}
         editHref={canEdit(role) ? `/post/${post.id}/edit` : null}

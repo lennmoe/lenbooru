@@ -3,9 +3,10 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import TagAutocomplete from "./TagAutocomplete";
+import { SearchIcon } from "./Icons";
 import { useT } from "./I18nProvider";
 
-/** Header search box with tag autocomplete (GET form to "/?tags=…"). */
+/** Sidebar search box with tag autocomplete (GET form to "/?tags=…"). */
 export default function TagSearch() {
   const t = useT();
   const params = useSearchParams();
@@ -22,6 +23,9 @@ export default function TagSearch() {
         onChange={setValue}
         placeholder={t.header.searchPlaceholder}
       />
+      <button type="submit" title={t.gallery.go} aria-label={t.gallery.go}>
+        <SearchIcon />
+      </button>
     </form>
   );
 }

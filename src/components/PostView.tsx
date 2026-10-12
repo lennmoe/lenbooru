@@ -13,6 +13,8 @@ const FITS: Fit[] = ["original", "width", "height", "both"];
 const FIT_KEY = "lenbooru.fit";
 
 interface Props {
+  /** search box at the top of the sidebar */
+  search: React.ReactNode;
   newer: number | null;
   older: number | null;
   editHref: string | null;
@@ -36,6 +38,7 @@ interface Props {
  * Options) and the media, with zoom modes and ←/→/E shortcuts.
  */
 export default function PostView({
+  search,
   newer,
   older,
   editHref,
@@ -86,6 +89,8 @@ export default function PostView({
   return (
     <div className="post-layout">
       <aside className="post-side">
+        {search}
+
         <nav className="post-nav">
           {newer ? (
             <Link href={`/post/${newer}`} title={`${t.post.prev} (←)`} aria-label={t.post.prev}>
